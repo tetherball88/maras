@@ -492,6 +492,7 @@ namespace MARAS::App {
         void OnSpouseRemovedFromHierarchy(RE::FormID npcFormID);
         void FillHierarchyGaps(RE::FormID excludeNpcFormID = 0, bool sendEvent = true);
         void SyncAllHierarchyFactionsAndGlobals();
+        void DispatchHierarchyShifts(const State::WorldMutationResult& mut);
 
         // ── Marriage Difficulty ──────────────────────────────────────────────────
         bool LoadMarriageDifficultyConfig();

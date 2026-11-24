@@ -541,26 +541,51 @@ namespace MARAS {
             req.cameFromMcmForceGrowth);
 
         auto resolveCallback = [this, expectedEpoch, capturedStackId, capturedMode](const std::string& chosenName) {
-            auto runOnMain = [this, expectedEpoch, capturedStackId, capturedMode, chosenName]() {
+            if (!IsSessionEpochCurrent(expectedEpoch)) {
+                std::uint32_t expected = capturedStackId;
+                activeStackId_.compare_exchange_strong(expected, 0, std::memory_order_acq_rel);
+                return;
+            }
+
+            struct StackReleaseGuard {
+                std::atomic<std::uint32_t>* activeStackId{ nullptr };
+                RE::VMStackID stackId{ 0 };
+                std::atomic<bool> completed{ false };
+
+                ~StackReleaseGuard() {
+                    if (!completed.load(std::memory_order_acquire) && activeStackId) {
+                        std::uint32_t expected = stackId;
+                        activeStackId->compare_exchange_strong(expected, 0, std::memory_order_acq_rel);
+                    }
+                }
+            };
+            auto releaseGuard = std::make_shared<StackReleaseGuard>();
+            releaseGuard->activeStackId = &activeStackId_;
+            releaseGuard->stackId = capturedStackId;
+
+            auto runPostLock = [this, expectedEpoch, capturedStackId, capturedMode, chosenName, releaseGuard]() {
                 if (!IsSessionEpochCurrent(expectedEpoch)) {
-                    activeStackId_.store(0, std::memory_order_release);
+                    releaseGuard->completed.store(true, std::memory_order_release);
+                    std::uint32_t expected = capturedStackId;
+                    activeStackId_.compare_exchange_strong(expected, 0, std::memory_order_acq_rel);
                     return;
                 }
                 CompleteFmrNamingIntercept(capturedStackId, capturedMode, chosenName);
-                activeStackId_.store(0, std::memory_order_release);
+                releaseGuard->completed.store(true, std::memory_order_release);
+                std::uint32_t expected = capturedStackId;
+                activeStackId_.compare_exchange_strong(expected, 0, std::memory_order_acq_rel);
                 MARAS_LOG_INFO(
                     "[FertilityNamingMenuSink] Resolved FMR child naming modal with '{}' (stack={})",
                     chosenName,
                     capturedStackId);
             };
 
-            if (DeferredActorResolver::GetSingleton().CanSyncEngineInline()) {
-                runOnMain();
-            } else {
-                (void)AddEpochTask(expectedEpoch, "FertilityNamingMenuSink::ResolveName", std::move(runOnMain));
-            }
+            // Always dispatch post-lock so VM spinlocks and synchronous SKSE ModCallbackEvent
+            // dispatch never run while GetPapyrusMutex() is held (prevents AB-BA deadlock).
+            DispatchPostLock(expectedEpoch, std::move(runPostLock), "FertilityNamingMenuSink::ResolveName");
         };
 
+        const bool fallbackFemale = req.isFemale;
         auto dispatchHook = [req = std::move(req), resolveCallback = std::move(resolveCallback)]() mutable {
             if (auto* hooks = Engine::GetEngineEventHooks()) {
                 hooks->OnFertilityChildNamingRequested(std::move(req), std::move(resolveCallback));
@@ -569,9 +594,22 @@ namespace MARAS {
             }
         };
 
-        if (!AddCurrentEpochTask("FertilityNamingMenuSink::OpenModal", dispatchHook) &&
-            DeferredActorResolver::GetSingleton().CanSyncEngineInline()) {
-            dispatchHook();
+        if (!AddCurrentEpochTask("FertilityNamingMenuSink::OpenModal", dispatchHook)) {
+            if (DeferredActorResolver::GetSingleton().CanSyncEngineInline()) {
+                dispatchHook();
+            } else {
+                MARAS_LOG_WARN(
+                    "[FertilityNamingMenuSink] Failed to enqueue OpenModal task (stack={}) — releasing activeStackId_",
+                    capturedStackId);
+                if (DeferredActorResolver::GetSingleton().IsOnMainThread() &&
+                    !IsPapyrusDomainLockedOnCurrentThread() &&
+                    IsSessionEpochCurrent(expectedEpoch)) {
+                    CompleteFmrNamingIntercept(
+                        capturedStackId, capturedMode, fallbackFemale ? "Freya" : "Sven");
+                }
+                std::uint32_t expected = capturedStackId;
+                activeStackId_.compare_exchange_strong(expected, 0, std::memory_order_acq_rel);
+            }
         }
 
         return RE::BSEventNotifyControl::kContinue;

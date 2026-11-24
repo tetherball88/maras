@@ -38,6 +38,69 @@ namespace MARAS::State {
             }
         }
 
+        void RemoveSpouseFromHierarchyWithDeltas(
+            WorldState& ws,
+            ActorId removedSpouse,
+            WorldMutationResult& result) {
+            if (removedSpouse.IsNull()) {
+                return;
+            }
+            const auto oldSlots = ws.hierarchy.Read().Slots();
+            const bool wasPresent = std::any_of(
+                oldSlots.begin(),
+                oldSlots.end(),
+                [removedSpouse](ActorId id) { return id == removedSpouse; });
+            if (!wasPresent) {
+                return;
+            }
+
+            const auto married = ws.GetPlayerSpousesInMarriageOrder();
+            const auto& deceased = ws.deceased.Read();
+            auto& hier = ws.hierarchy.Write();
+            for (std::size_t i = 0; i < SpouseHierarchyTable::kSlotCount; ++i) {
+                if (hier.GetSpouseAtSlot(i) == removedSpouse) {
+                    hier.SetRawSlot(i, ActorId{});
+                }
+            }
+            hier.FillGaps(married, removedSpouse, [&](ActorId id) {
+                return deceased.IsDeceased(id);
+            });
+            const auto newSlots = hier.Slots();
+
+            result.changed = true;
+            result.hierarchyChanged = true;
+            result.MarkActorDirty(removedSpouse);
+            for (const ActorId id : oldSlots) {
+                result.MarkActorDirty(id);
+            }
+            constexpr int kOutOfTopRank = 4;
+            for (std::size_t newIdx = 0; newIdx < newSlots.size(); ++newIdx) {
+                const ActorId id = newSlots[newIdx];
+                if (id.IsNull()) {
+                    continue;
+                }
+                result.MarkActorDirty(id);
+                if (id == removedSpouse) {
+                    continue;
+                }
+                int prevRank = kOutOfTopRank;
+                for (std::size_t j = 0; j < oldSlots.size(); ++j) {
+                    if (oldSlots[j] == id) {
+                        prevRank = static_cast<int>(j);
+                        break;
+                    }
+                }
+                const int curRank = static_cast<int>(newIdx);
+                if (prevRank != curRank) {
+                    result.hierarchyShifts.push_back(HierarchyShiftDelta{
+                        .spouse = id,
+                        .oldRank = prevRank,
+                        .newRank = curRank,
+                    });
+                }
+            }
+        }
+
     }  // namespace
 
     // =========================================================================
@@ -59,6 +122,9 @@ namespace MARAS::State {
     void WorldMutationResult::Merge(const WorldMutationResult& other) {
         if (other.changed) {
             changed = true;
+        }
+        if (other.hierarchyChanged) {
+            hierarchyChanged = true;
         }
         for (const ActorId actor : other.dirtyActors) {
             MarkActorDirty(actor);
@@ -92,6 +158,25 @@ namespace MARAS::State {
                 std::find(retiredSceneMarkers.begin(), retiredSceneMarkers.end(), marker) ==
                     retiredSceneMarkers.end()) {
                 retiredSceneMarkers.push_back(marker);
+            }
+        }
+        for (const auto& shift : other.hierarchyShifts) {
+            if (shift.spouse.IsNull()) {
+                continue;
+            }
+            const auto existingIt = std::find_if(
+                hierarchyShifts.begin(),
+                hierarchyShifts.end(),
+                [&](const HierarchyShiftDelta& existing) {
+                    return existing.spouse == shift.spouse;
+                });
+            if (existingIt != hierarchyShifts.end()) {
+                existingIt->newRank = shift.newRank;
+                if (existingIt->oldRank == existingIt->newRank) {
+                    hierarchyShifts.erase(existingIt);
+                }
+            } else {
+                hierarchyShifts.push_back(shift);
             }
         }
     }
@@ -556,7 +641,7 @@ namespace MARAS::State {
         if (actorA.IsPlayer() || actorB.IsPlayer()) {
             const ActorId exSpouse = key.Other(ActorId::Player());
             relationships.Write().ClearPendingIntent(exSpouse);
-            hierarchy.Write().OnSpouseRemoved(exSpouse, GetPlayerSpousesInMarriageOrder());
+            RemoveSpouseFromHierarchyWithDeltas(*this, exSpouse, result);
             if (household.Write().EvictTenant(exSpouse.raw())) {
                 result.changed = true;
             }
@@ -627,7 +712,7 @@ namespace MARAS::State {
         if (actorA.IsPlayer() || actorB.IsPlayer()) {
             const ActorId exPartner = key.Other(ActorId::Player());
             relationships.Write().ClearPendingIntent(exPartner);
-            hierarchy.Write().OnSpouseRemoved(exPartner, GetPlayerSpousesInMarriageOrder());
+            RemoveSpouseFromHierarchyWithDeltas(*this, exPartner, result);
             if (household.Write().EvictTenant(exPartner.raw())) {
                 result.changed = true;
             }
@@ -1864,7 +1949,7 @@ namespace MARAS::State {
         }
 
         // Reconcile SpouseHierarchy, Household, Affection, Cooldowns, and ActorProfile
-        hierarchy.Write().OnSpouseRemoved(deceasedActor, GetPlayerSpousesInMarriageOrder());
+        RemoveSpouseFromHierarchyWithDeltas(*this, deceasedActor, result);
         if (household.Write().EvictTenant(deceasedActor.raw())) {
             result.changed = true;
         }
@@ -1909,7 +1994,7 @@ namespace MARAS::State {
         }
         relationships.Write().ClearIntentsInvolving(actor);
 
-        hierarchy.Write().OnSpouseRemoved(actor, GetPlayerSpousesInMarriageOrder());
+        RemoveSpouseFromHierarchyWithDeltas(*this, actor, result);
         if (household.Write().EvictTenant(actor.raw())) {
             result.changed = true;
         }

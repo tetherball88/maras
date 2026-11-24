@@ -238,6 +238,74 @@ namespace MARAS::Domain::Relationships {
         return outcome;
     }
 
+    AffairStageUpdateOutcome ApplySetAffairStage(
+        State::WorldState& ws,
+        ActorId cheater,
+        ActorId victim,
+        ActorId affairPartnerFilter,
+        AffairStage stage,
+        float currentGameDay) {
+        AffairStageUpdateOutcome outcome;
+        if (cheater.IsNull() || victim.IsNull()) {
+            return outcome;
+        }
+        const AffairStage targetStage = victim.IsPlayer() ? stage : AffairStage::Physical;
+        outcome.appliedStage = targetStage;
+
+        const auto coupleRecords = ws.affairs.Read().GetForCouplePair(Foundation::CanonicalPairKey{ cheater, victim });
+        for (const auto& rec : coupleRecords) {
+            if (rec.cheater != cheater || rec.deceivedPartner != victim) {
+                continue;
+            }
+            if (!affairPartnerFilter.IsNull() && rec.paramour != affairPartnerFilter) {
+                continue;
+            }
+            if (rec.affairStage != targetStage) {
+                (void)ws.affairs.Write().SetStage(cheater, victim, rec.paramour, targetStage, currentGameDay);
+                if (targetStage == AffairStage::Physical) {
+                    const auto existingIntent = ws.relationships.Read().GetPendingIntent(cheater);
+                    if (existingIntent.type == PartnerIntentType::ConfessTalking &&
+                        (existingIntent.relatedLover.IsNull() || existingIntent.relatedLover == rec.paramour)) {
+                        ws.relationships.Write().SetPendingIntent(
+                            cheater,
+                            State::PendingPartnerIntentRecord{
+                                .type = PartnerIntentType::ConfessPhysical,
+                                .createdGameDay = currentGameDay,
+                                .relatedLover = rec.paramour,
+                            });
+                        outcome.intentUpgraded = true;
+                        outcome.upgradedLover = rec.paramour;
+                    }
+                }
+            }
+            outcome.updatedParamours.push_back(rec.paramour);
+            outcome.updated = true;
+            if (!affairPartnerFilter.IsNull()) {
+                break;
+            }
+        }
+        return outcome;
+    }
+
+    AffairStage GetEffectiveAffairStage(
+        const State::WorldStateSnapshot& snap,
+        ActorId cheater,
+        ActorId victim,
+        ActorId affairPartnerFilter) noexcept {
+        if (cheater.IsNull() || !victim.IsPlayer() || !snap.affairs) {
+            return AffairStage::Physical;
+        }
+        for (const auto& rec : snap.affairs->GetForCouplePair(Foundation::CanonicalPairKey{ cheater, victim })) {
+            if (rec.cheater == cheater && rec.deceivedPartner == victim &&
+                (affairPartnerFilter.IsNull() || rec.paramour == affairPartnerFilter)) {
+                if (!affairPartnerFilter.IsNull() || rec.affairStatus == AffairStatus::Ongoing) {
+                    return rec.affairStage;
+                }
+            }
+        }
+        return AffairStage::Physical;
+    }
+
     ExposeAffairOutcome ApplyAffairDiscoveryOrResolution(
         State::WorldState& ws,
         ActorId cheater,

@@ -12350,10 +12350,16 @@ var __privateSet = (obj, member, value, setter) => (__accessCheck(obj, member, "
       useMarasStore.getState().setIsOpen(true);
       refreshActiveDetailViewsOnOpen();
     };
-    window.closeMARASView = () => {
-      console.log("[UIBridge] closeMARASView called");
-      flushAllPendingDebouncedActions();
-      useMarasStore.getState().setIsOpen(false);
+    window.closeMARASView = (discardPending) => {
+      const shouldDiscard = discardPending === true || discardPending === "true";
+      console.log("[UIBridge] closeMARASView called", { discardPending: shouldDiscard });
+      if (shouldDiscard) {
+        discardPendingDebouncedActions();
+        useMarasStore.getState().resetSessionState();
+      } else {
+        flushAllPendingDebouncedActions();
+        useMarasStore.getState().setIsOpen(false);
+      }
     };
     window.onGamePausedChanged = (raw) => {
       const data = parsePayload(raw);
@@ -12391,35 +12397,36 @@ var __privateSet = (obj, member, value, setter) => (__accessCheck(obj, member, "
       if (!Array.isArray(list)) return;
       console.log("[UIBridge] receiveNPCList:", list);
       const store2 = useMarasStore.getState();
-      const profiles = list.map((item) => {
-        const existing = store2.npcProfiles.get(item.formId);
-        return {
-          formId: item.formId,
-          name: item.name,
-          race: item.race || "Nord",
-          socialClass: (existing == null ? void 0 : existing.socialClass) ?? item.socialClass ?? SocialClass.Middle,
-          skillType: (existing == null ? void 0 : existing.skillType) ?? item.skillType ?? SkillType.Warrior,
-          temperament: (existing == null ? void 0 : existing.temperament) ?? item.temperament ?? Temperament.Proud,
-          currentHome: item.currentHome ?? (existing == null ? void 0 : existing.currentHome),
-          originalHome: item.originalHome ?? (existing == null ? void 0 : existing.originalHome),
-          isChild: item.isChild ?? (existing == null ? void 0 : existing.isChild),
-          stage: item.stage ?? (existing == null ? void 0 : existing.stage),
-          isEphemeral: item.isEphemeral ?? (existing == null ? void 0 : existing.isEphemeral),
-          hasRefID: item.hasRefID ?? (existing == null ? void 0 : existing.hasRefID),
-          canGrowInfant: item.canGrowInfant ?? (existing == null ? void 0 : existing.canGrowInfant),
-          trainingLocation: item.trainingLocation ?? (existing == null ? void 0 : existing.trainingLocation),
-          trainingClassIndex: item.trainingClassIndex ?? (existing == null ? void 0 : existing.trainingClassIndex),
-          trainingClassName: item.trainingClassName ?? (existing == null ? void 0 : existing.trainingClassName),
-          trainingStartGameDay: item.trainingStartGameDay ?? (existing == null ? void 0 : existing.trainingStartGameDay),
-          critterBanned: (existing == null ? void 0 : existing.critterBanned) ?? item.critterBanned,
-          petBanned: (existing == null ? void 0 : existing.petBanned) ?? item.petBanned,
-          currentCritter: item.currentCritter !== void 0 ? item.currentCritter : existing == null ? void 0 : existing.currentCritter,
-          currentPet: item.currentPet !== void 0 ? item.currentPet : existing == null ? void 0 : existing.currentPet,
-          pluginName: item.pluginName || (existing == null ? void 0 : existing.pluginName),
-          gender: item.gender ?? (existing == null ? void 0 : existing.gender) ?? "male",
-          pendingIntent: item.pendingIntent ?? (existing == null ? void 0 : existing.pendingIntent)
-        };
-      });
+      const profiles = list.map((item) => ({
+        formId: item.formId,
+        name: item.name,
+        race: item.race || "Nord",
+        socialClass: item.socialClass ?? SocialClass.Middle,
+        skillType: item.skillType ?? SkillType.Warrior,
+        temperament: item.temperament ?? Temperament.Proud,
+        currentHome: item.currentHome,
+        originalHome: item.originalHome,
+        stayAtHome: item.stayAtHome,
+        currentPackage: item.currentPackage,
+        isChild: item.isChild,
+        stage: item.stage,
+        isEphemeral: item.isEphemeral,
+        hasRefID: item.hasRefID,
+        canGrowInfant: item.canGrowInfant,
+        trainingLocation: item.trainingLocation,
+        trainingClassIndex: item.trainingClassIndex,
+        trainingClassName: item.trainingClassName,
+        trainingStartGameDay: item.trainingStartGameDay,
+        critterBanned: item.critterBanned,
+        petBanned: item.petBanned,
+        currentCritter: item.currentCritter,
+        currentPet: item.currentPet,
+        pluginName: item.pluginName,
+        blockedFromAdoptionReason: item.blockedFromAdoptionReason,
+        gender: item.gender ?? "male",
+        pendingIntent: item.pendingIntent,
+        hasBeastblood: item.hasBeastblood
+      }));
       store2.setLiveGameData({ npcProfiles: profiles });
     };
     window.receiveNPCDetail = (rawDetail) => {
@@ -12439,7 +12446,7 @@ var __privateSet = (obj, member, value, setter) => (__accessCheck(obj, member, "
             }
           }
         }
-        const isChild = Boolean((existing == null ? void 0 : existing.isChild) ?? detail.isChild ?? store2.children.has(detail.formId));
+        const isChild = typeof detail.isChild === "boolean" ? detail.isChild : Boolean((existing == null ? void 0 : existing.isChild) ?? store2.children.has(detail.formId));
         store2.updateNPCProfile(
           detail.formId,
           {
@@ -12452,6 +12459,7 @@ var __privateSet = (obj, member, value, setter) => (__accessCheck(obj, member, "
             currentHome: detail.currentHome,
             originalHome: detail.originalHome,
             stayAtHome: detail.stayAtHome,
+            currentPackage: detail.currentPackage,
             isChild,
             stage: detail.stage,
             isEphemeral: detail.isEphemeral,
@@ -12465,8 +12473,10 @@ var __privateSet = (obj, member, value, setter) => (__accessCheck(obj, member, "
             petBanned: detail.petBanned,
             currentCritter: detail.currentCritter,
             currentPet: detail.currentPet,
+            blockedFromAdoptionReason: detail.blockedFromAdoptionReason,
             gender: detail.gender ?? (existing == null ? void 0 : existing.gender) ?? "male",
-            pendingIntent: detail.pendingIntent ?? (existing == null ? void 0 : existing.pendingIntent)
+            pendingIntent: detail.pendingIntent,
+            hasBeastblood: detail.hasBeastblood
           },
           true
           // skipBridge = true (incoming from C++)
@@ -17232,6 +17242,28 @@ var __privateSet = (obj, member, value, setter) => (__accessCheck(obj, member, "
   let pendingMatchmakingSettingsUpdates = {};
   const updateSettingDebounceTimers = /* @__PURE__ */ new Map();
   const pendingSettingUpdates = /* @__PURE__ */ new Map();
+  let allNpcsLoadSafetyTimer = null;
+  function discardPendingDebouncedActions() {
+    if (matchmakingSettingsDebounceTimer) {
+      clearTimeout(matchmakingSettingsDebounceTimer);
+      matchmakingSettingsDebounceTimer = null;
+    }
+    pendingMatchmakingSettingsUpdates = {};
+    for (const [, timer] of updateSettingDebounceTimers.entries()) {
+      clearTimeout(timer);
+    }
+    updateSettingDebounceTimers.clear();
+    pendingSettingUpdates.clear();
+    for (const [, timer] of setAffectionDebounceTimers.entries()) {
+      clearTimeout(timer);
+    }
+    setAffectionDebounceTimers.clear();
+    pendingAffectionUpdates.clear();
+    if (allNpcsLoadSafetyTimer) {
+      clearTimeout(allNpcsLoadSafetyTimer);
+      allNpcsLoadSafetyTimer = null;
+    }
+  }
   function flushAllPendingDebouncedActions() {
     if (matchmakingSettingsDebounceTimer) {
       clearTimeout(matchmakingSettingsDebounceTimer);
@@ -17931,12 +17963,29 @@ var __privateSet = (obj, member, value, setter) => (__accessCheck(obj, member, "
       get().setGamePaused(nextPaused);
     },
     setPlayerHomes: (playerHomes) => set({ playerHomes }),
-    setAllSkyrimNpcs: (allSkyrimNpcs) => set({ allSkyrimNpcs, isLoadingAllNpcs: false }),
+    setAllSkyrimNpcs: (allSkyrimNpcs) => {
+      if (allNpcsLoadSafetyTimer) {
+        clearTimeout(allNpcsLoadSafetyTimer);
+        allNpcsLoadSafetyTimer = null;
+      }
+      set({ allSkyrimNpcs, isLoadingAllNpcs: false });
+    },
     fetchAllSkyrimNpcs: () => {
       const { isInGame: isInGame2 } = get();
+      if (allNpcsLoadSafetyTimer) {
+        clearTimeout(allNpcsLoadSafetyTimer);
+        allNpcsLoadSafetyTimer = null;
+      }
       set({ isLoadingAllNpcs: true });
       if (isInGame2) {
         sendMarasAction("fetchAllSkyrimNpcs");
+        allNpcsLoadSafetyTimer = setTimeout(() => {
+          allNpcsLoadSafetyTimer = null;
+          if (get().isLoadingAllNpcs) {
+            console.warn("[MarasStore] fetchAllSkyrimNpcs timed out after 15s; clearing spinner");
+            set({ isLoadingAllNpcs: false });
+          }
+        }, 15e3);
       } else {
         setTimeout(() => {
           set({ allSkyrimNpcs: mockAllSkyrimNpcs, isLoadingAllNpcs: false });
@@ -18073,10 +18122,9 @@ var __privateSet = (obj, member, value, setter) => (__accessCheck(obj, member, "
         }
         let nextProfiles = state.npcProfiles;
         if (data.npcProfiles && Array.isArray(data.npcProfiles)) {
-          const newMap = new Map(state.npcProfiles);
+          const newMap = /* @__PURE__ */ new Map();
           data.npcProfiles.forEach((npc) => {
-            const existing = newMap.get(npc.formId);
-            newMap.set(npc.formId, existing ? { ...existing, ...npc } : npc);
+            newMap.set(npc.formId, npc);
           });
           updates.npcProfiles = newMap;
           nextProfiles = newMap;
@@ -18089,8 +18137,7 @@ var __privateSet = (obj, member, value, setter) => (__accessCheck(obj, member, "
         if (data.children && Array.isArray(data.children)) {
           const newMap = /* @__PURE__ */ new Map();
           data.children.forEach((c) => {
-            const existing = state.rawChildren.get(c.childId);
-            newMap.set(c.childId, existing ? { ...existing, ...c } : c);
+            newMap.set(c.childId, c);
           });
           nextRawChildren = newMap;
         }
@@ -18099,7 +18146,7 @@ var __privateSet = (obj, member, value, setter) => (__accessCheck(obj, member, "
           nextRawCheating = data.cheatingRecords;
         }
         if (data.affectionData && Array.isArray(data.affectionData)) {
-          const newMap = new Map(state.affectionData);
+          const newMap = /* @__PURE__ */ new Map();
           data.affectionData.forEach((aff) => newMap.set(aff.formId, aff));
           updates.affectionData = newMap;
         }
@@ -18213,7 +18260,7 @@ var __privateSet = (obj, member, value, setter) => (__accessCheck(obj, member, "
       };
       const hasChanges = !existing || Object.keys(updates).some((key) => {
         const newVal = updates[key];
-        if (newVal === void 0) return false;
+        if (!skipBridge && newVal === void 0) return false;
         return !isSameValue(newVal, existing[key]);
       });
       if (!hasChanges) {
@@ -18822,13 +18869,55 @@ var __privateSet = (obj, member, value, setter) => (__accessCheck(obj, member, "
     closeUi: () => {
       var _a2;
       flushAllPendingDebouncedActions();
-      sendMarasAction("closeUi");
-      if (typeof window !== "undefined" && window.closeMARAS) {
+      if (typeof window !== "undefined" && window.marasAction) {
+        sendMarasAction("closeUi");
+      } else if (typeof window !== "undefined" && window.closeMARAS) {
         window.closeMARAS();
       } else {
         (_a2 = window.log) == null ? void 0 : _a2.call(window, "closeMARAS called (standalone mode)");
       }
       set({ isOpen: false });
+    },
+    resetSessionState: () => {
+      const emptyProfiles = /* @__PURE__ */ new Map();
+      const emptyChildren = /* @__PURE__ */ new Map();
+      set((state) => ({
+        isOpen: false,
+        isGamePaused: false,
+        npcDetailId: null,
+        npcDetailPartnerId: null,
+        npcDetailPreviousContext: null,
+        selectedNpcId: null,
+        detailPanelOpen: false,
+        evaluatingChildId: null,
+        matchmakingModalOpen: false,
+        matchmakingTargetNpcId: null,
+        aiSuggestions: [],
+        isGeneratingAiSuggestions: false,
+        searchQueryA: "",
+        searchQueryB: "",
+        searchQueryModal: "",
+        searchResultsA: [],
+        searchResultsB: [],
+        searchResultsModal: [],
+        isSearchingA: false,
+        isSearchingB: false,
+        isSearchingModal: false,
+        isLoadingAllNpcs: false,
+        npcProfiles: emptyProfiles,
+        ...computeVisibleSecretsState(
+          [],
+          emptyChildren,
+          [],
+          Boolean(state.settings.revealSecretsInUI),
+          emptyProfiles
+        ),
+        affectionData: /* @__PURE__ */ new Map(),
+        hierarchyRanks: ["", "", ""],
+        playerHomes: [],
+        householdBuffs: null,
+        isLoadingBuffs: false
+      }));
     },
     refreshData: () => {
       flushAllPendingDebouncedActions();
@@ -37904,9 +37993,9 @@ Defaulting to \`null\`.`;
         if (isEditableTarget(e.target)) return;
         const scanCode = convertKeyboardEventToScanCode(e);
         if (scanCode !== settings2.toggleUIKey) return;
-        if (settings2.toggleUIModCtrl && !e.ctrlKey) return;
-        if (settings2.toggleUIModShift && !e.shiftKey) return;
-        if (settings2.toggleUIModAlt && !e.altKey) return;
+        if (e.ctrlKey !== Boolean(settings2.toggleUIModCtrl) || e.shiftKey !== Boolean(settings2.toggleUIModShift) || e.altKey !== Boolean(settings2.toggleUIModAlt)) {
+          return;
+        }
         e.preventDefault();
         closeUi();
       };

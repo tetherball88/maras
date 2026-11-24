@@ -844,3 +844,28 @@ MARAS_TEST(Reconcilers, AdultActorFactions_PotentialMarriageAndIgnoreProposalLif
         MARAS_CHECK_EQ(plan.clearIgnoreProposeKeyword, true);
     }
 }
+
+MARAS_TEST(Reconcilers, AdultActorFactions_CourtingFactionLeftUntouchedWhenEngagedAndClearedOtherwise) {
+    WorldStore store{};
+    constexpr ActorId npc{ 0x0001E101u };
+
+    store.Modify([&](WorldState& ws) {
+        ws.actors.Write().Upsert(MakeAdultProfile(npc.raw()));
+        AddRelationship(ws, npc, ActorId::Player(), RelationshipStatus::Engaged);
+    });
+
+    const auto engagedPlan = ComputeAdultActorFactionPlan(*store.Snapshot(), npc);
+    MARAS_CHECK_EQ(engagedPlan.marriageAskedOp, FactionMembershipOp::EnsurePresent);
+    MARAS_CHECK_EQ(engagedPlan.courtingOp, FactionMembershipOp::LeaveUntouched);
+
+    for (const auto st : { RelationshipStatus::Candidate, RelationshipStatus::Dating,
+                           RelationshipStatus::Lover, RelationshipStatus::Married,
+                           RelationshipStatus::Divorced, RelationshipStatus::Jilted,
+                           RelationshipStatus::ExDating, RelationshipStatus::ExLover }) {
+        store.Modify([&](WorldState& ws) {
+            ws.relationships.Write().GetOrCreateEdge(npc, ActorId::Player()).status = st;
+        });
+        const auto plan = ComputeAdultActorFactionPlan(*store.Snapshot(), npc);
+        MARAS_CHECK_EQ(plan.courtingOp, FactionMembershipOp::EnsureAbsent);
+    }
+}

@@ -226,16 +226,22 @@ namespace MARAS {
                 auto& fc = FormCache::GetSingleton();
                 constexpr RE::FormID playerID = Foundation::kPlayerRefRawId;
 
+                auto* courtingFaction = fc.GetCourtingFaction();
+                const bool inCourtingFaction = courtingFaction && npc->IsInFaction(courtingFaction);
+
                 switch (newStatus) {
                     case Foundation::RelationshipStatus::Dating:
                     case Foundation::RelationshipStatus::Lover:
-                        if (GetVanillaRelationshipRank(npcID, playerID) < 3) {
+                        if (!inCourtingFaction && GetVanillaRelationshipRank(npcID, playerID) < 3) {
                             DispatchSetRelationshipRank(npcID, playerID, 3);
                         }
                         break;
 
                     case Foundation::RelationshipStatus::Engaged:
-                        DispatchSetRelationshipRank(npcID, playerID, 3);
+                        // Do not dispatch async SetRelationshipRank here: it races with
+                        // TTM_ServiceMarriageQuest.StartEngagement filling RelationshipMarriage.LoveInterest
+                        // (ALFC 0x0007431A) and triggers CHRR -> RelationshipMarriageBreakUp (0x0007431B).
+                        // StartEngagement raises rank (< 3 -> 3) synchronously before ForceRefTo.
                         if (auto* cooldownSpell = fc.GetBreakupCooldownSpell();
                             cooldownSpell && npc->HasSpell(cooldownSpell)) {
                             npc->RemoveSpell(cooldownSpell);
@@ -244,7 +250,12 @@ namespace MARAS {
                         break;
 
                     case Foundation::RelationshipStatus::Married:
-                        DispatchSetRelationshipRank(npcID, playerID, 4);
+                        // Only raise rank to Lover (4) if not already >= 4 and not currently in
+                        // MarriageCourtingFaction (e.g. active LoveInterest alias before SkipWedding
+                        // calls ResetMarriageQuests; SkipWedding applies rank 4 after clearing it).
+                        if (!inCourtingFaction && GetVanillaRelationshipRank(npcID, playerID) < 4) {
+                            DispatchSetRelationshipRank(npcID, playerID, 4);
+                        }
                         if (auto* cooldownSpell = fc.GetBreakupCooldownSpell();
                             cooldownSpell && npc->HasSpell(cooldownSpell)) {
                             npc->RemoveSpell(cooldownSpell);

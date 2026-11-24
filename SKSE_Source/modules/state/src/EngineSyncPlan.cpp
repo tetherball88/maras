@@ -317,7 +317,11 @@ namespace MARAS::State {
                 plan.playerFactionOp = FactionMembershipOp::EnsureAbsent;
                 plan.playerBedOwnershipOp = FactionMembershipOp::EnsureAbsent;
                 plan.marriageAskedOp = FactionMembershipOp::EnsurePresent;
-                plan.courtingOp = FactionMembershipOp::EnsurePresent;
+                // Vanilla RelationshipMarriage (0x00074793) LoveInterest alias manages
+                // MarriageCourtingFaction (0x0007431A) via ALFC. Forcing it early here
+                // arms SMQN 0x0007431C (RelationshipMarriageBreakUp) during rank changes
+                // and on secondary polygamist fiances waiting for the active wedding.
+                plan.courtingOp = FactionMembershipOp::LeaveUntouched;
             } else {
                 plan.marriedFactionOp = FactionMembershipOp::EnsureAbsent;
                 plan.playerFactionOp = FactionMembershipOp::EnsureAbsent;

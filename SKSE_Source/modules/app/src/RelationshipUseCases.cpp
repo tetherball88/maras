@@ -488,6 +488,46 @@ namespace MARAS::App {
             GetUiBridgeGateway().OnHierarchyChanged();
         }
 
+        void EmitPartnerIntentChangedEvent(RE::FormID partnerID, Foundation::PartnerIntentType type) {
+            if (partnerID == 0 || IsPlayerFormID(partnerID)) {
+                return;
+            }
+            std::string intentStr(Foundation::PartnerIntentTypeToString(type));
+            auto* partnerActor = SpatialWorldIndex::GetSingleton().GetActorFromFormId(partnerID);
+            const RE::FormID senderID = partnerActor ? partnerActor->GetFormID() : 0;
+            EmitModCallbackEvent(
+                "maras_partner_intent_changed",
+                std::move(intentStr),
+                static_cast<float>(static_cast<std::uint8_t>(type)),
+                senderID);
+        }
+
+        void StripVanillaMarriageFactionsOnMainThread(RE::FormID npcFormID) {
+            if (npcFormID == 0 || IsPlayerFormID(npcFormID)) {
+                return;
+            }
+            auto apply = [npcFormID]() {
+                auto* actor = RE::TESForm::LookupByID<RE::Actor>(npcFormID);
+                if (!actor || actor->IsDeleted()) {
+                    return;
+                }
+                auto& fc = FormCache::GetSingleton();
+                Utils::RemoveFromFaction(actor, fc.GetMarriageAskedFaction());
+                Utils::RemoveFromFaction(actor, fc.GetCourtingFaction());
+                Utils::RemoveFromFaction(actor, fc.GetMarriedFaction());
+                if (auto* playerFac = fc.GetPlayerFaction();
+                    playerFac && !FactionReconciler::IsNativeBaseFaction(actor, playerFac)) {
+                    Utils::RemoveFromFaction(actor, playerFac);
+                }
+                Utils::RemoveFromFaction(actor, fc.GetPlayerBedOwnershipFaction());
+            };
+            if (DeferredActorResolver::GetSingleton().CanSyncEngineInline()) {
+                apply();
+            } else {
+                AddCurrentEpochTask("RelationshipUseCases::StripVanillaMarriageFactions", std::move(apply));
+            }
+        }
+
     }  // namespace
 
     RelationshipUseCases& RelationshipUseCases::GetSingleton() {
@@ -715,6 +755,16 @@ namespace MARAS::App {
         }
 
         for (const auto& pair : toMarry) {
+            auto* actorA = RE::TESForm::LookupByID<RE::Actor>(pair.first.raw());
+            auto* actorB = RE::TESForm::LookupByID<RE::Actor>(pair.second.raw());
+            if (!actorA || actorA->IsDead() || actorA->IsDeleted() ||
+                !actorB || actorB->IsDead() || actorB->IsDeleted()) {
+                continue;
+            }
+            if (GetRelationshipStatus(pair.first.raw(), pair.second.raw()) !=
+                Foundation::RelationshipStatus::Engaged) {
+                continue;
+            }
             if (PromoteToMarried(pair.first.raw(), pair.second.raw(), /*sendEvent=*/true, /*breakLovers=*/true)) {
                 MARAS_LOG_INFO("CheckAutoMarriageForEngagedNPCs: Auto-married engaged pair ({:08X}, {:08X}) on day {:.2f}",
                                pair.first.raw(), pair.second.raw(), currentDay);
@@ -832,6 +882,17 @@ namespace MARAS::App {
                                                             RE::FormID affairPartnerId,
                                                             bool isWalkIn) {
         (void)isWalkIn;
+        if (cheaterId != 0 && affairPartnerId != 0) {
+            (void)SetCheatingDiscovered(cheaterId, affairPartnerId, "caught", victimId);
+        }
+        if (cheaterId != 0 && !IsPlayerFormID(cheaterId) && victimId == kPlayerFormID) {
+            const auto curIntent = GetPartnerPendingIntent(cheaterId);
+            if ((curIntent.type == Foundation::PartnerIntentType::ConfessTalking ||
+                 curIntent.type == Foundation::PartnerIntentType::ConfessPhysical) &&
+                (curIntent.relatedLoverID == 0 || curIntent.relatedLoverID == affairPartnerId)) {
+                ClearPartnerIntent(cheaterId);
+            }
+        }
         if (cheaterId != 0) {
             UpdateSpouseCheatingFaction(cheaterId);
             UpdateCanFormNonCheatingMainFaction(cheaterId);
@@ -851,9 +912,22 @@ namespace MARAS::App {
     // Registration, Unregistration & Death
     // =========================================================================
 
-    bool RelationshipUseCases::EnsureRegistered(RE::FormID npcFormID) {
+    bool RelationshipUseCases::EnsureRegistered(RE::FormID inputFormID) {
+        if (inputFormID == 0) {
+            return false;
+        }
+        if (IsPlayerFormID(inputFormID)) {
+            return true;
+        }
+        RE::FormID npcFormID = inputFormID;
+        if (const RE::FormID resolvedRef = SpatialWorldIndex::GetSingleton().GetRefID(npcFormID); resolvedRef != 0) {
+            npcFormID = resolvedRef;
+        }
         if (npcFormID == 0) {
             return false;
+        }
+        if (IsPlayerFormID(npcFormID)) {
+            return true;
         }
         if (IsRegistered(npcFormID)) {
             return true;
@@ -861,8 +935,15 @@ namespace MARAS::App {
         return RegisterCandidate(npcFormID);
     }
 
-    bool RelationshipUseCases::RegisterAsCandidate(RE::FormID npcFormID) {
-        if (npcFormID == 0 || npcFormID == kPlayerFormID) {
+    bool RelationshipUseCases::RegisterAsCandidate(RE::FormID inputFormID) {
+        if (inputFormID == 0 || IsPlayerFormID(inputFormID)) {
+            return false;
+        }
+        RE::FormID npcFormID = inputFormID;
+        if (const RE::FormID resolvedRef = SpatialWorldIndex::GetSingleton().GetRefID(npcFormID); resolvedRef != 0) {
+            npcFormID = resolvedRef;
+        }
+        if (npcFormID == 0 || IsPlayerFormID(npcFormID)) {
             return false;
         }
         if (!EnsureRegistered(npcFormID)) {
@@ -880,8 +961,15 @@ namespace MARAS::App {
         return DemoteToCandidate(npcFormID, kPlayerFormID, /*sendEvent=*/true);
     }
 
-    bool RelationshipUseCases::RegisterCandidate(RE::FormID npcFormID) {
-        if (npcFormID == 0) {
+    bool RelationshipUseCases::RegisterCandidate(RE::FormID inputFormID) {
+        if (inputFormID == 0 || IsPlayerFormID(inputFormID)) {
+            return false;
+        }
+        RE::FormID npcFormID = inputFormID;
+        if (const RE::FormID resolvedRef = SpatialWorldIndex::GetSingleton().GetRefID(npcFormID); resolvedRef != 0) {
+            npcFormID = resolvedRef;
+        }
+        if (npcFormID == 0 || IsPlayerFormID(npcFormID)) {
             return false;
         }
         if (IsChildNPC(npcFormID)) {
@@ -892,6 +980,21 @@ namespace MARAS::App {
         if (preSnap->actors->IsRegisteredAdult(State::RefId{ npcFormID })) {
             return true;
         }
+        if (!State::IsLegacyMigrationActive()) {
+            if (LineageUseCases::GetSingleton().IsDeceased(npcFormID)) {
+                MARAS_LOG_DEBUG("RegisterCandidate: Refusing to register deceased NPC {:08X}", npcFormID);
+                return false;
+            }
+            if (auto* liveActor = RE::TESForm::LookupByID<RE::Actor>(npcFormID);
+                liveActor && (liveActor->IsDead() || liveActor->IsDeleted())) {
+                MARAS_LOG_DEBUG("RegisterCandidate: Refusing to register dead/deleted NPC {:08X}", npcFormID);
+                return false;
+            }
+            if (!ActorSvc::IsValid(npcFormID)) {
+                MARAS_LOG_WARN("RegisterCandidate: Refusing to register invalid actor {:08X}", npcFormID);
+                return false;
+            }
+        }
 
         const auto socialClass = DetermineSocialClass(npcFormID);
         const auto skillType = DetermineSkillType(npcFormID);
@@ -900,13 +1003,11 @@ namespace MARAS::App {
             [this](RE::FormID id) { return GetTemperamentOverride(id); },
             [socialClass](RE::FormID) { return socialClass; },
             [skillType](RE::FormID) { return skillType; });
-        const RE::FormID baseIdRaw = SpatialWorldIndex::GetSingleton().GetBaseID(npcFormID);
+        const bool isDynamicActor = Foundation::IsDynamicRuntimeActorRawId(npcFormID);
+        const RE::FormID baseIdRaw = isDynamicActor
+            ? npcFormID
+            : SpatialWorldIndex::GetSingleton().GetBaseID(npcFormID);
         const RE::FormID origHome = SpatialWorldIndex::GetSingleton().GetNpcHome(npcFormID);
-        const int initialCandidateAffection = (npcFormID != kPlayerFormID)
-            ? Domain::Relationships::ComputeInitialCandidateAffection(
-                  RelationshipEngineReconciler::GetSingleton().GetVanillaRelationshipRank(
-                      npcFormID, kPlayerFormID))
-            : kAffectionDefault;
 
         State::ActorProfileRecord record;
         record.refId = State::RefId{ npcFormID };
@@ -919,22 +1020,29 @@ namespace MARAS::App {
             record.legacyOriginalHome = State::FormRawId{ origHome };
         }
 
+        bool newlyRegistered = false;
         State::WorldStore::GetSingleton().Modify([&](State::WorldState& ws) {
             if (const auto* existing = ws.actors.Read().Find(record.refId)) {
+                newlyRegistered = !existing->isRegisteredAdult;
                 record.legacyHomeMarker = existing->legacyHomeMarker;
                 record.legacyCurrentHome = existing->legacyCurrentHome;
                 record.addedKeywords = existing->addedKeywords;
                 if (existing->legacyOriginalHome.has_value()) {
                     record.legacyOriginalHome = existing->legacyOriginalHome;
                 }
+            } else {
+                newlyRegistered = true;
             }
             ws.actors.Write().Upsert(std::move(record));
-            if (npcFormID != kPlayerFormID && !ws.affection.Read().HasPermanent(State::ActorId{ npcFormID })) {
-                ws.affection.Write().SetPermanent(State::ActorId{ npcFormID }, initialCandidateAffection);
-            }
         });
 
         FactionReconciler::GetSingleton().ReconcileActor(npcFormID);
+        if (newlyRegistered) {
+            if (!isDynamicActor && baseIdRaw != 0 && baseIdRaw != npcFormID) {
+                TryResolvePendingRelationships(baseIdRaw, npcFormID);
+            }
+            GlobalVarReconciler::GetSingleton().ReconcileGlobals();
+        }
         MARAS_LOG_INFO("Registered NPC '{}' ({:08X}) [class={}, skill={}, temp={}]",
                        ActorSvc::GetName(npcFormID),
                        npcFormID,
@@ -949,7 +1057,7 @@ namespace MARAS::App {
     }
 
     bool RelationshipUseCases::UnregisterCandidate(RE::FormID npcFormID) {
-        if (npcFormID == 0 || npcFormID == kPlayerFormID) {
+        if (npcFormID == 0 || IsPlayerFormID(npcFormID)) {
             return false;
         }
         const auto snap = State::WorldStore::GetSingleton().Snapshot();
@@ -978,17 +1086,14 @@ namespace MARAS::App {
         FactionReconciler::GetSingleton().ReconcileActor(npcFormID);
         PackageReconciler::GetSingleton().UnregisterActor(npcFormID);
         PackageReconciler::GetSingleton().ReconcileActor(npcFormID);
+        StripVanillaMarriageFactionsOnMainThread(npcFormID);
 
-        if (auto* actor = RE::TESForm::LookupByID<RE::Actor>(npcFormID)) {
-            auto& fc = FormCache::GetSingleton();
-            Utils::RemoveFromFaction(actor, fc.GetMarriageAskedFaction());
-            Utils::RemoveFromFaction(actor, fc.GetCourtingFaction());
-            Utils::RemoveFromFaction(actor, fc.GetMarriedFaction());
-            Utils::RemoveFromFaction(actor, fc.GetPlayerFaction());
-            Utils::RemoveFromFaction(actor, fc.GetPlayerBedOwnershipFaction());
+        for (const auto& delta : affairCleanup.clearedIntents) {
+            EmitPartnerIntentChangedEvent(delta.partnerId.raw(), Foundation::PartnerIntentType::None);
         }
 
         ReconcileDirtyActorsAndChildren(mut, /*reconcilePackages=*/true);
+        DispatchHierarchyShifts(mut);
         for (const auto pId : activePartners) {
             if (pId != 0 && pId != kPlayerFormID) {
                 FactionReconciler::GetSingleton().ReconcileActor(pId);
@@ -1011,7 +1116,7 @@ namespace MARAS::App {
     }
 
     bool RelationshipUseCases::HandleNPCDeath(RE::FormID npcFormID) {
-        if (npcFormID == 0 || npcFormID == kPlayerFormID) {
+        if (npcFormID == 0 || IsPlayerFormID(npcFormID)) {
             return false;
         }
         const auto snap = State::WorldStore::GetSingleton().Snapshot();
@@ -1041,8 +1146,14 @@ namespace MARAS::App {
         BedOwnershipReconciler::GetSingleton().ReconcileStoppedSharingFromMutation(npcFormID, mut, "deceased");
         ClearCurrentHome(npcFormID);
         BanterSceneCoordinator::GetSingleton().CleanupRetiredSceneMarkers(mut.retiredSceneMarkers);
+        StripVanillaMarriageFactionsOnMainThread(npcFormID);
+
+        for (const auto& delta : cleanup.clearedIntents) {
+            EmitPartnerIntentChangedEvent(delta.partnerId.raw(), Foundation::PartnerIntentType::None);
+        }
 
         ReconcileDirtyActorsAndChildren(mut, /*reconcilePackages=*/true);
+        DispatchHierarchyShifts(mut);
         if (mut.changed && !preChildren.empty()) {
             const auto postSnap = State::WorldStore::GetSingleton().Snapshot();
             LineageUseCases::GetSingleton().HandleDeathCustodySideEffects(preChildren, *postSnap, npcFormID);
@@ -1534,28 +1645,34 @@ namespace MARAS::App {
             return false;
         }
 
-        if (targetStatus == vanillaStatus) {
-            return PromoteToStatusWith(actorA, actorB, targetStatus, /*sendEvent=*/false, /*breakLovers=*/true);
+        ScopedMemorySuppression suppressMemories;
+
+        if (targetStatus == Foundation::RelationshipStatus::Divorced ||
+            targetStatus == Foundation::RelationshipStatus::ExDating ||
+            targetStatus == Foundation::RelationshipStatus::ExLover) {
+            State::WorldStore::GetSingleton().Modify([&](State::WorldState& ws) {
+                auto& edge = ws.relationships.Write().GetOrCreateEdge(
+                    State::ActorId{ actorA }, State::ActorId{ actorB });
+                edge.status = vanillaStatus;
+                if (edge.originalStatus == Foundation::RelationshipStatus::Unknown) {
+                    edge.originalStatus = vanillaStatus;
+                }
+            });
         }
 
-        // Breakup imports (e.g. Married -> Divorced) must first mirror the pre-existing vanilla bond.
-        if (IsBreakupStatus(targetStatus) &&
-            (vanillaStatus == Foundation::RelationshipStatus::Married ||
-             vanillaStatus == Foundation::RelationshipStatus::Dating ||
-             vanillaStatus == Foundation::RelationshipStatus::Lover)) {
-            if (!PromoteToStatusWith(actorA, actorB, vanillaStatus, /*sendEvent=*/false, /*breakLovers=*/false)) {
-                return false;
-            }
-            return PromoteToStatusWith(actorA, actorB, targetStatus, /*sendEvent=*/false, /*breakLovers=*/false);
-        }
-
-        return PromoteToStatusWith(actorA, actorB, targetStatus, /*sendEvent=*/false, /*breakLovers=*/true);
+        return PromoteToStatusWith(actorA, actorB, targetStatus, /*sendEvent=*/false, /*breakLovers=*/false);
     }
 
     bool RelationshipUseCases::HasMarasMaritalHistory(RE::FormID npcFormID) const {
         if (npcFormID == 0) {
             return false;
         }
+        auto isMaritalStatus = [](Foundation::RelationshipStatus st) noexcept {
+            return st == Foundation::RelationshipStatus::Married ||
+                   st == Foundation::RelationshipStatus::Divorced ||
+                   st == Foundation::RelationshipStatus::Engaged ||
+                   st == Foundation::RelationshipStatus::Jilted;
+        };
         const auto snap = State::WorldStore::GetSingleton().Snapshot();
         const State::ActorId actor{ npcFormID };
         for (const auto& key : snap->relationships->GetAdjacentPairs(actor)) {
@@ -1563,12 +1680,11 @@ namespace MARAS::App {
             if (!edge) {
                 continue;
             }
-            if (edge->status == Foundation::RelationshipStatus::Married ||
-                edge->status == Foundation::RelationshipStatus::Divorced) {
+            if (isMaritalStatus(edge->status)) {
                 return true;
             }
             for (const auto& hist : edge->statusHistory) {
-                if (hist.toStatus == Foundation::RelationshipStatus::Married) {
+                if (isMaritalStatus(hist.fromStatus) || isMaritalStatus(hist.toStatus)) {
                     return true;
                 }
             }
@@ -1921,7 +2037,9 @@ namespace MARAS::App {
                 ClearCurrentHome(npcID);
                 PackageReconciler::GetSingleton().ReconcileActor(npcID);
             }
-            if (oldStatus == Foundation::RelationshipStatus::Married) {
+            if (mut.hierarchyChanged || !mut.hierarchyShifts.empty()) {
+                DispatchHierarchyShifts(mut);
+            } else if (oldStatus == Foundation::RelationshipStatus::Married) {
                 OnSpouseRemovedFromHierarchy(npcID);
             }
         } else {
@@ -1947,8 +2065,9 @@ namespace MARAS::App {
         }
 
         if (!IsBreakupStatus(status)) {
-            EnsureRegistered(npcFormID);
-            EnsureRegistered(targetFormID);
+            if (!EnsureRegistered(npcFormID) || !EnsureRegistered(targetFormID)) {
+                return false;
+            }
         }
 
         const auto preSnap = State::WorldStore::GetSingleton().Snapshot();
@@ -1964,11 +2083,11 @@ namespace MARAS::App {
             }
         }
         const float currentGameDay = GetCurrentGameDays();
+        const bool isPlayerPair = (npcFormID == kPlayerFormID || targetFormID == kPlayerFormID);
         const RE::FormID initiator = (explicitInitiatorID != 0)
                                          ? explicitInitiatorID
-                                         : DetermineDefaultInitiator(npcFormID, targetFormID);
+                                         : (isPlayerPair ? kPlayerFormID : npcFormID);
 
-        const bool isPlayerPair = (npcFormID == kPlayerFormID || targetFormID == kPlayerFormID);
         const RE::FormID playerPartnerID = isPlayerPair
                                                ? ((npcFormID == kPlayerFormID) ? targetFormID : npcFormID)
                                                : 0;
@@ -1996,7 +2115,7 @@ namespace MARAS::App {
             if (targetFormID != kPlayerFormID) {
                 FactionReconciler::GetSingleton().ReconcileActor(targetFormID);
             }
-            return true;
+            return false;
         }
 
         if (!outcome.allowed) {
@@ -2004,6 +2123,9 @@ namespace MARAS::App {
                            npcFormID, targetFormID,
                            Foundation::RelationshipStatusToString(status),
                            outcome.blockReason);
+            if (!outcome.blockReason.empty() && sendEvent && isPlayerPair) {
+                QueueHUDMessage(outcome.blockReason);
+            }
             return false;
         }
 
@@ -2213,10 +2335,34 @@ namespace MARAS::App {
         }
     }
 
-    bool RelationshipUseCases::RemoveRelationship(RE::FormID actorA, RE::FormID actorB) {
-        if (actorA == 0 || actorB == 0 || actorA == actorB) {
+    bool RelationshipUseCases::RemoveRelationship(RE::FormID rawActorA, RE::FormID rawActorB) {
+        if (rawActorA == 0 || rawActorB == 0 || rawActorA == rawActorB ||
+            rawActorA == kPlayerBaseFormID || rawActorB == kPlayerBaseFormID) {
             return false;
         }
+        RE::FormID actorA = rawActorA;
+        RE::FormID actorB = rawActorB;
+        if (!IsPlayerFormID(actorA)) {
+            if (const RE::FormID resolvedRef = SpatialWorldIndex::GetSingleton().GetRefID(actorA); resolvedRef != 0) {
+                actorA = resolvedRef;
+            }
+        }
+        if (!IsPlayerFormID(actorB)) {
+            if (const RE::FormID resolvedRef = SpatialWorldIndex::GetSingleton().GetRefID(actorB); resolvedRef != 0) {
+                actorB = resolvedRef;
+            }
+        }
+        if (actorA == 0 || actorB == 0 || actorA == actorB ||
+            actorA == kPlayerBaseFormID || actorB == kPlayerBaseFormID) {
+            return false;
+        }
+        if (!IsPlayerFormID(actorA)) {
+            (void)EnsureRegistered(actorA);
+        }
+        if (!IsPlayerFormID(actorB)) {
+            (void)EnsureRegistered(actorB);
+        }
+
         const auto preSnap = State::WorldStore::GetSingleton().Snapshot();
         const auto* existingEdge = preSnap->relationships->FindEdge(State::ActorId{ actorA }, State::ActorId{ actorB });
         const bool wasMarriedToPlayer =
@@ -2262,6 +2408,8 @@ namespace MARAS::App {
 
         std::unordered_set<RE::FormID> affectedActors{ actorA, actorB };
         State::WorldMutationResult custodyMut;
+        Domain::Relationships::HierarchyMutationOutcome hierarchyOutcome;
+        std::vector<Domain::Relationships::ClearedIntentDelta> clearedIntents;
 
         State::WorldStore::GetSingleton().Modify([&](State::WorldState& ws) {
             auto removePendingFor = [&](RE::FormID ownerBase, RE::FormID partnerBase, RE::FormID partnerRef) {
@@ -2334,12 +2482,31 @@ namespace MARAS::App {
             if (isPlayerPair) {
                 ws.household.Write().EvictTenant(playerPartnerID);
                 if (wasMarriedToPlayer) {
-                    (void)Domain::Relationships::ApplyOnSpouseRemoved(ws, State::ActorId{ playerPartnerID });
+                    hierarchyOutcome = Domain::Relationships::ApplyOnSpouseRemoved(
+                        ws, State::ActorId{ playerPartnerID });
+                }
+                ws.affection.Write().EraseActor(State::ActorId{ playerPartnerID });
+                (void)ws.relationships.Write().EraseEdge(State::ActorId{ actorA }, State::ActorId{ actorB });
+                if (ws.actors.Read().IsRegisteredAdult(State::RefId{ playerPartnerID })) {
+                    State::RelationshipEdgeRecord cleanEdge;
+                    cleanEdge.pair = State::CanonicalPairKey{ State::ActorId{ playerPartnerID }, State::ActorId::Player() };
+                    cleanEdge.status = Foundation::RelationshipStatus::Candidate;
+                    ws.relationships.Write().UpsertEdge(std::move(cleanEdge));
+                }
+            } else {
+                (void)ws.relationships.Write().EraseEdge(State::ActorId{ actorA }, State::ActorId{ actorB });
+                for (const RE::FormID npcId : { actorA, actorB }) {
+                    if (ws.actors.Read().IsRegisteredAdult(State::RefId{ npcId }) &&
+                        !ws.relationships.Read().FindEdge(State::ActorId{ npcId }, State::ActorId::Player())) {
+                        State::RelationshipEdgeRecord cleanEdge;
+                        cleanEdge.pair = State::CanonicalPairKey{ State::ActorId{ npcId }, State::ActorId::Player() };
+                        cleanEdge.status = Foundation::RelationshipStatus::Candidate;
+                        ws.relationships.Write().UpsertEdge(std::move(cleanEdge));
+                    }
                 }
             }
 
-            (void)ws.relationships.Write().EraseEdge(State::ActorId{ actorA }, State::ActorId{ actorB });
-            (void)Domain::Relationships::EvaluateBreakupAffairsAndIntents(
+            clearedIntents = Domain::Relationships::EvaluateBreakupAffairsAndIntents(
                 ws, State::ActorId{ actorA }, State::ActorId{ actorB });
 
             // Strip ambiguous biological parent attribution if only the other actor holds an engine ParentChild link
@@ -2351,7 +2518,7 @@ namespace MARAS::App {
             }
             for (const auto cId : childIds) {
                 const auto* child = ws.lineage->FindChild(cId);
-                if (!child) {
+                if (!child || child->isBiologicalChild || child->isAdopted) {
                     continue;
                 }
                 if (child->bioMother.raw() == actorA || child->bioMother.raw() == actorB ||
@@ -2382,6 +2549,13 @@ namespace MARAS::App {
             }
             (void)gameDay;
         });
+
+        for (const auto& delta : clearedIntents) {
+            EmitPartnerIntentChangedEvent(delta.partnerId.raw(), Foundation::PartnerIntentType::None);
+        }
+        if (hierarchyOutcome.slotsChanged || !hierarchyOutcome.clearedActors.empty()) {
+            ReconcileHierarchySlotsAndEvents(hierarchyOutcome, /*emitModEvents=*/true);
+        }
 
         if (isPlayerPair) {
             BedOwnershipReconciler::GetSingleton().ReconcileStoppedSharingFromMutation(
@@ -2485,6 +2659,12 @@ namespace MARAS::App {
         const auto snap = State::WorldStore::GetSingleton().Snapshot();
         const State::ActorId selfId{ npcFormID };
         for (const auto& key : snap->relationships->GetAdjacentPairs(selfId)) {
+            const auto* edge = snap->relationships->FindEdge(key);
+            if (!edge ||
+                edge->status == Foundation::RelationshipStatus::Unknown ||
+                edge->status == Foundation::RelationshipStatus::Candidate) {
+                continue;
+            }
             const auto other = key.Other(selfId);
             if (!other.IsNull()) {
                 result.push_back(other.raw());
@@ -2507,7 +2687,7 @@ namespace MARAS::App {
         }
         const auto snap = State::WorldStore::GetSingleton().Snapshot();
         const auto* edge = snap->relationships->FindEdge(State::ActorId{ actorA }, State::ActorId{ actorB });
-        if (!edge) {
+        if (!edge || edge->status != Foundation::RelationshipStatus::Engaged) {
             return -1.0f;
         }
         for (auto it = edge->statusHistory.rbegin(); it != edge->statusHistory.rend(); ++it) {
@@ -2663,13 +2843,8 @@ namespace MARAS::App {
             return Foundation::RelationshipStatus::Unknown;
         }
         const auto snap = State::WorldStore::GetSingleton().Snapshot();
-        if (const auto* edge = snap->relationships->FindEdge(State::ActorId{ npcFormID }, State::ActorId{ targetFormID })) {
-            return edge->status;
-        }
-        if (IsRegistered(npcFormID) && (targetFormID == kPlayerFormID || IsRegistered(targetFormID))) {
-            return Foundation::RelationshipStatus::Candidate;
-        }
-        return Foundation::RelationshipStatus::Unknown;
+        const auto* edge = snap->relationships->FindEdge(State::ActorId{ npcFormID }, State::ActorId{ targetFormID });
+        return edge ? edge->status : Foundation::RelationshipStatus::Unknown;
     }
 
     std::vector<StatusChangeRecord> RelationshipUseCases::GetStatusHistory(
@@ -2839,11 +3014,13 @@ namespace MARAS::App {
     }
 
     bool RelationshipUseCases::SetSocialClass(RE::FormID npcFormID, std::int8_t socialClass) {
-        if (npcFormID == 0 || socialClass < 0 ||
+        if (npcFormID == 0 || IsPlayerFormID(npcFormID) || socialClass < 0 ||
             socialClass >= static_cast<std::int8_t>(Foundation::SocialClass::_Count)) {
             return false;
         }
-        EnsureRegistered(npcFormID);
+        if (!EnsureRegistered(npcFormID)) {
+            return false;
+        }
         State::WorldStore::GetSingleton().Modify([&](State::WorldState& ws) {
             if (auto* prof = ws.actors.Write().FindMutable(State::RefId{ npcFormID })) {
                 prof->socialClass = static_cast<Foundation::SocialClass>(socialClass);
@@ -2858,11 +3035,13 @@ namespace MARAS::App {
     }
 
     bool RelationshipUseCases::SetSkillType(RE::FormID npcFormID, std::int8_t skillType) {
-        if (npcFormID == 0 || skillType < 0 ||
+        if (npcFormID == 0 || IsPlayerFormID(npcFormID) || skillType < 0 ||
             skillType >= static_cast<std::int8_t>(Foundation::SkillType::_Count)) {
             return false;
         }
-        EnsureRegistered(npcFormID);
+        if (!EnsureRegistered(npcFormID)) {
+            return false;
+        }
         State::WorldStore::GetSingleton().Modify([&](State::WorldState& ws) {
             if (auto* prof = ws.actors.Write().FindMutable(State::RefId{ npcFormID })) {
                 prof->skillType = static_cast<Foundation::SkillType>(skillType);
@@ -2877,11 +3056,13 @@ namespace MARAS::App {
     }
 
     bool RelationshipUseCases::SetTemperament(RE::FormID npcFormID, std::int8_t temperament) {
-        if (npcFormID == 0 || temperament < 0 ||
+        if (npcFormID == 0 || IsPlayerFormID(npcFormID) || temperament < 0 ||
             temperament >= static_cast<std::int8_t>(Foundation::Temperament::_Count)) {
             return false;
         }
-        EnsureRegistered(npcFormID);
+        if (!EnsureRegistered(npcFormID)) {
+            return false;
+        }
         State::WorldStore::GetSingleton().Modify([&](State::WorldState& ws) {
             if (auto* prof = ws.actors.Write().FindMutable(State::RefId{ npcFormID })) {
                 prof->temperament = static_cast<Foundation::Temperament>(temperament);
@@ -2893,15 +3074,30 @@ namespace MARAS::App {
     }
 
     bool RelationshipUseCases::AddToSocialClassFaction(RE::FormID npcFormID, std::int8_t rank) {
-        return SetSocialClass(npcFormID, rank);
+        if (npcFormID == 0 || IsPlayerFormID(npcFormID) || rank < 0 ||
+            rank >= static_cast<std::int8_t>(Foundation::SocialClass::_Count)) {
+            return false;
+        }
+        FactionReconciler::GetSingleton().ReconcileActor(npcFormID);
+        return true;
     }
 
     bool RelationshipUseCases::AddToSkillTypeFaction(RE::FormID npcFormID, std::int8_t rank) {
-        return SetSkillType(npcFormID, rank);
+        if (npcFormID == 0 || IsPlayerFormID(npcFormID) || rank < 0 ||
+            rank >= static_cast<std::int8_t>(Foundation::SkillType::_Count)) {
+            return false;
+        }
+        FactionReconciler::GetSingleton().ReconcileActor(npcFormID);
+        return true;
     }
 
     bool RelationshipUseCases::AddToTemperamentFaction(RE::FormID npcFormID, std::int8_t rank) {
-        return SetTemperament(npcFormID, rank);
+        if (npcFormID == 0 || IsPlayerFormID(npcFormID) || rank < 0 ||
+            rank >= static_cast<std::int8_t>(Foundation::Temperament::_Count)) {
+            return false;
+        }
+        FactionReconciler::GetSingleton().ReconcileActor(npcFormID);
+        return true;
     }
 
     void RelationshipUseCases::ManageFactions(RE::FormID npcFormID,
@@ -3019,19 +3215,28 @@ namespace MARAS::App {
     }
 
     bool RelationshipUseCases::AddTrackedKeyword(RE::FormID npcFormID, RE::FormID keywordFormID) {
-        if (npcFormID == 0 || keywordFormID == 0) {
+        if (npcFormID == 0 || IsPlayerFormID(npcFormID) || keywordFormID == 0) {
             return false;
         }
-        EnsureRegistered(npcFormID);
+        if (!EnsureRegistered(npcFormID)) {
+            return false;
+        }
         State::WorldStore::GetSingleton().Modify([&](State::WorldState& ws) {
             if (auto* prof = ws.actors.Write().FindMutable(State::RefId{ npcFormID })) {
                 prof->addedKeywords.insert(State::FormRawId{ keywordFormID });
             }
         });
-        if (auto* kw = RE::TESForm::LookupByID<RE::BGSKeyword>(keywordFormID)) {
-            if (auto* base = ActorSvc::GetActorBase(npcFormID); base && !base->HasKeyword(kw)) {
-                base->AddKeyword(kw);
+        auto applyKeyword = [npcFormID, keywordFormID]() {
+            if (auto* kw = RE::TESForm::LookupByID<RE::BGSKeyword>(keywordFormID)) {
+                if (auto* base = ActorSvc::GetActorBase(npcFormID); base && !base->HasKeyword(kw)) {
+                    base->AddKeyword(kw);
+                }
             }
+        };
+        if (DeferredActorResolver::GetSingleton().CanSyncEngineInline()) {
+            applyKeyword();
+        } else {
+            AddCurrentEpochTask("RelationshipUseCases::AddTrackedKeyword", std::move(applyKeyword));
         }
         return true;
     }
@@ -3090,6 +3295,9 @@ namespace MARAS::App {
         if (actorA == 0 || actorB == 0 || actorA == actorB) {
             return false;
         }
+        if (!EnsureRegistered(actorA) || !EnsureRegistered(actorB)) {
+            return false;
+        }
         const float currentDay = GetCurrentGameDays();
         Domain::Relationships::PairOpenOutcome outcome;
         std::vector<RE::FormID> playerVictimCheatersToRefresh;
@@ -3107,25 +3315,65 @@ namespace MARAS::App {
                 ws, State::ActorId{ actorA }, State::ActorId{ actorB }, isOpen, currentDay);
         });
 
-        for (const auto& [member, lover] : outcome.brokenLovers) {
-            (void)PromoteToExLover(member.raw(), lover.raw(), sendEvent);
+        for (const auto clearedId : outcome.clearedIntents) {
+            EmitPartnerIntentChangedEvent(clearedId.raw(), Foundation::PartnerIntentType::None);
+        }
+
+        if (!outcome.brokenLovers.empty()) {
+            const bool skyrimNetReady = GetSkyrimNetGateway().IsAvailable();
+            const bool recordMem = skyrimNetReady &&
+                                   (sendEvent || GetSkyrimNetGateway().IsMatchmakingApplyActive());
+            for (const auto& [member, lover] : outcome.brokenLovers) {
+                const RE::FormID memberRaw = member.raw();
+                const RE::FormID loverRaw = lover.raw();
+                const bool pairHasPlayer = (member.IsPlayer() || lover.IsPlayer());
+                if (pairHasPlayer) {
+                    const RE::FormID npcID = member.IsPlayer() ? loverRaw : memberRaw;
+                    SetPermanentAffection(npcID, 0, /*sendEvent=*/false);
+                    FactionReconciler::GetSingleton().ReconcileActor(npcID);
+                    RelationshipEngineReconciler::GetSingleton().ReconcilePlayerStatusTransition(
+                        npcID, Foundation::RelationshipStatus::ExLover, /*appliedBreakupCooldown=*/false, sendEvent);
+                    PackageReconciler::GetSingleton().ReconcileActor(npcID);
+                } else {
+                    FactionReconciler::GetSingleton().ReconcileActor(memberRaw);
+                    FactionReconciler::GetSingleton().ReconcileActor(loverRaw);
+                    PackageReconciler::GetSingleton().ReconcileActor(memberRaw);
+                    PackageReconciler::GetSingleton().ReconcileActor(loverRaw);
+                }
+                GetUiBridgeGateway().OnStatusChanged(
+                    memberRaw, loverRaw, static_cast<std::uint8_t>(Foundation::RelationshipStatus::ExLover));
+                if (sendEvent) {
+                    EmitStatusChangedModEvents(memberRaw, loverRaw, Foundation::RelationshipStatus::ExLover);
+                }
+                if (recordMem) {
+                    GetSkyrimNetGateway().RecordRelationshipStatusChange(
+                        memberRaw, loverRaw, Foundation::RelationshipStatus::Lover, Foundation::RelationshipStatus::ExLover);
+                }
+            }
+            GlobalVarReconciler::GetSingleton().ReconcileGlobals();
         }
 
         UpdateSpouseOpenRelationshipFaction(actorA);
         UpdateSpouseOpenRelationshipFaction(actorB);
+        UpdateSpouseCheatingFaction(actorA);
+        UpdateSpouseCheatingFaction(actorB);
+        UpdateCanFormNonCheatingMainFaction(actorA);
+        UpdateCanFormNonCheatingMainFaction(actorB);
         if (isOpen) {
-            UpdateSpouseCheatingFaction(actorA);
-            UpdateSpouseCheatingFaction(actorB);
-            UpdateCanFormNonCheatingMainFaction(actorA);
-            UpdateCanFormNonCheatingMainFaction(actorB);
             for (const RE::FormID extraId : playerVictimCheatersToRefresh) {
                 if (extraId != 0 && extraId != kPlayerFormID) {
                     UpdateCanFormNonCheatingMainFaction(extraId);
                 }
             }
-            if (actorA == kPlayerFormID || actorB == kPlayerFormID) {
-                FactionReconciler::GetSingleton().ReconcilePlayer();
+            for (const auto cheaterId : outcome.allowedCheatersToRefresh) {
+                if (!cheaterId.IsNull() && !cheaterId.IsPlayer()) {
+                    UpdateSpouseCheatingFaction(cheaterId.raw());
+                    UpdateCanFormNonCheatingMainFaction(cheaterId.raw());
+                }
             }
+        }
+        if (actorA == kPlayerFormID || actorB == kPlayerFormID || !outcome.brokenLovers.empty()) {
+            FactionReconciler::GetSingleton().ReconcilePlayer();
         }
 
         GetUiBridgeGateway().OnStatusChanged(actorA, actorB, static_cast<std::uint8_t>(outcome.pairStatus));
@@ -3136,7 +3384,7 @@ namespace MARAS::App {
             GetSkyrimNetGateway().RecordOpenRelationshipToggle(actorA, actorB, isOpen);
         }
 
-        if (sendEvent) {
+        if (sendEvent && outcome.wasOpen != isOpen) {
             AffectionEventCoordinator::GetSingleton().OnOpenRelationshipToggled(actorA, actorB, isOpen);
 
             nlohmann::json payload;
@@ -3180,6 +3428,9 @@ namespace MARAS::App {
         if (cheaterID == 0 || victimID == 0 || affairPartnerID == 0) {
             return false;
         }
+        if (!EnsureRegistered(cheaterID) || !EnsureRegistered(victimID) || !EnsureRegistered(affairPartnerID)) {
+            return false;
+        }
         const float currentDay = GetCurrentGameDays();
         Domain::Relationships::CheatingIncidentOutcome outcome;
         State::WorldStore::GetSingleton().Modify([&](State::WorldState& ws) {
@@ -3195,6 +3446,9 @@ namespace MARAS::App {
                 currentDay);
         });
         if (outcome.recorded) {
+            if (outcome.intentUpgraded) {
+                EmitPartnerIntentChangedEvent(cheaterID, Foundation::PartnerIntentType::ConfessPhysical);
+            }
             UpdateSpouseCheatingFaction(cheaterID);
             UpdateSpouseCheatingFaction(victimID);
             UpdateCanFormNonCheatingMainFaction(cheaterID);
@@ -3328,29 +3582,47 @@ namespace MARAS::App {
                                                       RE::FormID affairPartnerID,
                                                       Foundation::AffairStage stage) {
         const float day = GetCurrentGameDays();
-        bool updated = false;
+        Domain::Relationships::AffairStageUpdateOutcome outcome;
         State::WorldStore::GetSingleton().Modify([&](State::WorldState& ws) {
-            updated = ws.affairs.Write().SetStage(
-                State::ActorId{ cheaterID }, State::ActorId{ victimID }, State::ActorId{ affairPartnerID }, stage, day);
+            outcome = Domain::Relationships::ApplySetAffairStage(
+                ws,
+                State::ActorId{ cheaterID },
+                State::ActorId{ victimID },
+                State::ActorId{ affairPartnerID },
+                stage,
+                day);
         });
-        return updated;
+        if (outcome.intentUpgraded) {
+            EmitPartnerIntentChangedEvent(cheaterID, Foundation::PartnerIntentType::ConfessPhysical);
+        }
+        if (!outcome.updated) {
+            MARAS_LOG_WARN(
+                "SetCheatingAffairStage: No matching cheating record found for cheater {:08X} on victim {:08X} with affairPartner {:08X}",
+                cheaterID, victimID, affairPartnerID);
+            return false;
+        }
+        return true;
     }
 
     Foundation::AffairStage RelationshipUseCases::GetCheatingAffairStage(RE::FormID cheaterID,
                                                                          RE::FormID victimID,
                                                                          RE::FormID affairPartnerID) const {
         const auto snap = State::WorldStore::GetSingleton().Snapshot();
-        if (const auto* rec = snap->affairs->FindTriple(
-                State::ActorId{ cheaterID }, State::ActorId{ victimID }, State::ActorId{ affairPartnerID })) {
-            return rec->affairStage;
-        }
-        return Foundation::AffairStage::Physical;
+        return Domain::Relationships::GetEffectiveAffairStage(
+            *snap,
+            State::ActorId{ cheaterID },
+            State::ActorId{ victimID },
+            State::ActorId{ affairPartnerID });
     }
 
     void RelationshipUseCases::SetPartnerPendingIntent(RE::FormID partnerID,
                                                        Foundation::PartnerIntentType type,
                                                        RE::FormID relatedLoverID) {
-        if (partnerID == 0 || partnerID == kPlayerFormID) {
+        if (partnerID == 0 || IsPlayerFormID(partnerID)) {
+            return;
+        }
+        if (type == Foundation::PartnerIntentType::None) {
+            ClearPartnerIntent(partnerID);
             return;
         }
         const float day = GetCurrentGameDays();
@@ -3359,6 +3631,7 @@ namespace MARAS::App {
                 State::ActorId{ partnerID },
                 State::PendingPartnerIntentRecord{ type, day, State::ActorId{ relatedLoverID } });
         });
+        EmitPartnerIntentChangedEvent(partnerID, type);
     }
 
     PendingPartnerIntent RelationshipUseCases::GetPartnerPendingIntent(RE::FormID partnerID) const {
@@ -3371,9 +3644,13 @@ namespace MARAS::App {
         if (partnerID == 0) {
             return;
         }
+        bool cleared = false;
         State::WorldStore::GetSingleton().Modify([&](State::WorldState& ws) {
-            (void)ws.relationships.Write().ClearPendingIntent(State::ActorId{ partnerID });
+            cleared = ws.relationships.Write().ClearPendingIntent(State::ActorId{ partnerID });
         });
+        if (cleared) {
+            EmitPartnerIntentChangedEvent(partnerID, Foundation::PartnerIntentType::None);
+        }
     }
 
     void RelationshipUseCases::MarkCheatingAllowedForPair(RE::FormID actorA, RE::FormID actorB) {
@@ -3491,6 +3768,57 @@ namespace MARAS::App {
             return false;
         }
 
+        for (const auto clearedId : outcome.clearedIntents) {
+            EmitPartnerIntentChangedEvent(clearedId.raw(), Foundation::PartnerIntentType::None);
+        }
+
+        // Apply structural resolutions BEFORE firing OnAffairResolved / events so listeners observe final statuses
+        for (const auto victimOpen : outcome.victimsToOpen) {
+            (void)SetPairIsOpen(cheaterID, victimOpen.raw(), /*isOpen=*/true, /*sendEvent=*/true);
+        }
+        for (const auto victimSplit : outcome.victimsToSplit) {
+            if (victimSplit.raw() == kPlayerFormID) {
+                const auto st = GetRelationshipStatus(cheaterID, kPlayerFormID);
+                std::optional<Foundation::RelationshipStatus> targetBreakup;
+                switch (st) {
+                    case Foundation::RelationshipStatus::Married:
+                        targetBreakup = Foundation::RelationshipStatus::Divorced;
+                        break;
+                    case Foundation::RelationshipStatus::Engaged:
+                        targetBreakup = Foundation::RelationshipStatus::Jilted;
+                        break;
+                    case Foundation::RelationshipStatus::Dating:
+                        targetBreakup = Foundation::RelationshipStatus::ExDating;
+                        break;
+                    case Foundation::RelationshipStatus::Lover:
+                        targetBreakup = Foundation::RelationshipStatus::ExLover;
+                        break;
+                    default:
+                        break;
+                }
+                if (targetBreakup.has_value()) {
+                    (void)ChangeStatusCommon(
+                        cheaterID,
+                        kPlayerFormID,
+                        *targetBreakup,
+                        kPlayerFormID,
+                        /*sendEvent=*/true,
+                        /*breakLovers=*/false,
+                        /*partnerCheatedOnPlayer=*/true);
+                }
+            } else {
+                (void)Breakup(cheaterID, victimSplit.raw(), /*sendEvent=*/true);
+            }
+        }
+        for (const auto partnerBreak : outcome.partnersToBreak) {
+            const auto st = GetRelationshipStatus(cheaterID, partnerBreak.raw());
+            if (st == Foundation::RelationshipStatus::Lover) {
+                (void)PromoteToExLover(cheaterID, partnerBreak.raw(), /*sendEvent=*/true);
+            } else if (st == Foundation::RelationshipStatus::Dating) {
+                (void)PromoteToExDating(cheaterID, partnerBreak.raw(), /*sendEvent=*/true);
+            }
+        }
+
         for (const auto& ev : outcome.events) {
             nlohmann::json payload;
             payload["cheater"] = FormatFormIdUpper(ev.cheater.raw());
@@ -3558,57 +3886,18 @@ namespace MARAS::App {
             }
         }
 
-        for (const auto victimOpen : outcome.victimsToOpen) {
-            (void)SetPairIsOpen(cheaterID, victimOpen.raw(), /*isOpen=*/true, /*sendEvent=*/true);
-        }
-        for (const auto victimSplit : outcome.victimsToSplit) {
-            if (victimSplit.raw() == kPlayerFormID) {
-                const auto st = GetRelationshipStatus(cheaterID, kPlayerFormID);
-                std::optional<Foundation::RelationshipStatus> targetBreakup;
-                switch (st) {
-                    case Foundation::RelationshipStatus::Married:
-                        targetBreakup = Foundation::RelationshipStatus::Divorced;
-                        break;
-                    case Foundation::RelationshipStatus::Engaged:
-                        targetBreakup = Foundation::RelationshipStatus::Jilted;
-                        break;
-                    case Foundation::RelationshipStatus::Dating:
-                        targetBreakup = Foundation::RelationshipStatus::ExDating;
-                        break;
-                    case Foundation::RelationshipStatus::Lover:
-                        targetBreakup = Foundation::RelationshipStatus::ExLover;
-                        break;
-                    default:
-                        break;
-                }
-                if (targetBreakup.has_value()) {
-                    (void)ChangeStatusCommon(
-                        cheaterID,
-                        kPlayerFormID,
-                        *targetBreakup,
-                        kPlayerFormID,
-                        /*sendEvent=*/true,
-                        /*breakLovers=*/false,
-                        /*partnerCheatedOnPlayer=*/true);
-                }
-            } else {
-                (void)Breakup(cheaterID, victimSplit.raw(), /*sendEvent=*/true);
-            }
-        }
-        for (const auto partnerBreak : outcome.partnersToBreak) {
-            const auto st = GetRelationshipStatus(cheaterID, partnerBreak.raw());
-            if (st == Foundation::RelationshipStatus::Lover) {
-                (void)PromoteToExLover(cheaterID, partnerBreak.raw(), /*sendEvent=*/true);
-            } else if (st == Foundation::RelationshipStatus::Dating) {
-                (void)PromoteToExDating(cheaterID, partnerBreak.raw(), /*sendEvent=*/true);
-            }
-        }
-
+        bool playerInvolved = (cheaterID == kPlayerFormID);
         UpdateSpouseCheatingFaction(cheaterID);
         UpdateCanFormNonCheatingMainFaction(cheaterID);
         for (const auto v : outcome.victimsToUpdate) {
+            if (v.IsPlayer()) {
+                playerInvolved = true;
+            }
             UpdateSpouseCheatingFaction(v.raw());
             UpdateCanFormNonCheatingMainFaction(v.raw());
+        }
+        if (playerInvolved) {
+            FactionReconciler::GetSingleton().ReconcilePlayer();
         }
 
         GetUiBridgeGateway().SendOverviewData();
@@ -3687,10 +3976,10 @@ namespace MARAS::App {
 
     int RelationshipUseCases::GetPermanentAffection(RE::FormID npcFormID) const {
         if (npcFormID == 0) {
-            return kAffectionDefault;
+            return 0;
         }
         const auto snap = State::WorldStore::GetSingleton().Snapshot();
-        return snap->affection->GetPermanent(State::ActorId{ npcFormID }, kAffectionDefault);
+        return snap->affection->GetPermanent(State::ActorId{ npcFormID }, 0);
     }
 
     void RelationshipUseCases::SetAffection(RE::FormID npcFormID, int amount, bool sendEvent) {
@@ -3702,10 +3991,10 @@ namespace MARAS::App {
             return;
         }
         const int clamped = State::AffectionTable::ClampScore(amount);
-        int oldVal = kAffectionDefault;
+        int oldVal = 0;
         bool isMarried = false;
         State::WorldStore::GetSingleton().Modify([&](State::WorldState& ws) {
-            oldVal = ws.affection.Read().GetPermanent(State::ActorId{ npcFormID }, kAffectionDefault);
+            oldVal = ws.affection.Read().GetPermanent(State::ActorId{ npcFormID }, 0);
             ws.affection.Write().SetPermanent(State::ActorId{ npcFormID }, clamped);
             isMarried = ws.relationships.Read().GetStatus(
                             State::ActorId::Player(), State::ActorId{ npcFormID }) ==
@@ -3991,6 +4280,36 @@ namespace MARAS::App {
         }
         GlobalVarReconciler::GetSingleton().ReconcileGlobals();
         BuffReconciler::GetSingleton().ReconcilePlayerBuffs();
+    }
+
+    void RelationshipUseCases::DispatchHierarchyShifts(const State::WorldMutationResult& mut) {
+        if (!mut.hierarchyChanged && mut.hierarchyShifts.empty()) {
+            return;
+        }
+        auto& factionRec = FactionReconciler::GetSingleton();
+        std::unordered_set<RE::FormID> seen;
+        for (const auto& shift : mut.hierarchyShifts) {
+            const RE::FormID spouseID = shift.spouse.raw();
+            if (spouseID == 0 || IsPlayerFormID(spouseID)) {
+                continue;
+            }
+            if (seen.insert(spouseID).second) {
+                factionRec.ReconcileActor(spouseID);
+            }
+            const int rankDiffInt = shift.RankDiff();
+            const float rankDiff = static_cast<float>(rankDiffInt);
+            if (rankDiffInt != 0) {
+                AffectionEventCoordinator::GetSingleton().OnHierarchyRankChanged(spouseID, rankDiffInt);
+                RelationshipEngineReconciler::GetSingleton().ReconcileHierarchyRankChange(spouseID, rankDiff);
+            }
+            EmitHierarchyChangedModEvent(
+                spouseID,
+                shift.IsPromotion() ? "promote" : "demote",
+                rankDiff);
+        }
+        BuffReconciler::GetSingleton().ReconcilePlayerBuffs();
+        GlobalVarReconciler::GetSingleton().ReconcileGlobals();
+        GetUiBridgeGateway().OnHierarchyChanged();
     }
 
     // =========================================================================
@@ -4673,7 +4992,14 @@ namespace MARAS::App {
     }
 
     void RelationshipUseCases::SyncAllMarriedCouplesChildCustody() {
+        ScopedMemorySuppression suppressMemories;
         const auto preSnap = State::WorldStore::GetSingleton().Snapshot();
+        std::unordered_map<RE::FormID, State::ChildRecord> preChildren;
+        if (preSnap && preSnap->lineage) {
+            for (const auto& [cid, rec] : preSnap->lineage->AllChildren()) {
+                preChildren.emplace(cid.raw(), rec);
+            }
+        }
         CachedActorMetadataProvider meta;
         meta.CaptureActors(preSnap, {});
         Foundation::DeterministicRng rng(0xC0570D1Au);
@@ -4683,6 +5009,68 @@ namespace MARAS::App {
             mut = ws.SyncAllMarriedCouplesChildCustody(meta, rng);
         });
         ReconcileDirtyActorsAndChildren(mut, /*reconcilePackages=*/true);
+
+        if (mut.changed && !preChildren.empty()) {
+            const auto postSnap = State::WorldStore::GetSingleton().Snapshot();
+            auto& lineage = LineageUseCases::GetSingleton();
+            std::unordered_set<RE::FormID> guardiansToRefresh;
+            for (const auto& [cID, preRec] : preChildren) {
+                const auto* postRec = (postSnap && postSnap->lineage)
+                    ? postSnap->lineage->FindChild(State::ChildId{ cID })
+                    : nullptr;
+                if (!postRec) {
+                    continue;
+                }
+                const auto gDiff = Utils::DiffGuardianSets(
+                    preRec.guardians.slotA.raw(), preRec.guardians.slotB.raw(),
+                    postRec->guardians.slotA.raw(), postRec->guardians.slotB.raw());
+                const bool paternityChanged =
+                    (preRec.paternitySecret.HasActiveSecret() && !postRec->paternitySecret.HasActiveSecret()) ||
+                    (preRec.presumedFather != postRec->presumedFather);
+                if (!gDiff.changed && !paternityChanged) {
+                    continue;
+                }
+                if (gDiff.changed) {
+                    lineage.UpdateChildBothParentsFaction(cID);
+                    if (postRec->stage != Foundation::ChildStage::Unborn &&
+                        postRec->stage != Foundation::ChildStage::Adult) {
+                        const RE::FormID childHouseID =
+                            (postSnap && postSnap->household)
+                                ? postSnap->household->GetTenantHouse(cID).raw()
+                                : 0;
+                        if (postRec->guardians.HasGuardian(State::ActorId::Player())) {
+                            if (childHouseID != 0) {
+                                lineage.SyncChildHouseholdState(
+                                    cID, postRec->guardians.slotA.raw(), postRec->guardians.slotB.raw(), childHouseID);
+                            } else {
+                                lineage.UpdateNonPlayerChildPackageOverride(cID);
+                                if (Foundation::HasPhysicalActorRawId(cID)) {
+                                    FactionReconciler::GetSingleton().ReconcileActor(cID);
+                                }
+                            }
+                        } else {
+                            lineage.SyncChildHouseholdState(
+                                cID, postRec->guardians.slotA.raw(), postRec->guardians.slotB.raw());
+                        }
+                    }
+                    lineage.SendChildEvent(
+                        "guardians_changed", cID,
+                        postRec->guardians.slotA.raw(), postRec->guardians.slotB.raw(),
+                        gDiff.PrimaryRemoved().raw(), "marriage");
+                    for (const RE::FormID gId : {
+                             preRec.guardians.slotA.raw(), preRec.guardians.slotB.raw(),
+                             postRec->guardians.slotA.raw(), postRec->guardians.slotB.raw() }) {
+                        if (gId != 0 && !IsPlayerFormID(gId)) {
+                            guardiansToRefresh.insert(gId);
+                        }
+                    }
+                }
+                GetUiBridgeGateway().OnChildUpdated(*postRec);
+            }
+            for (const RE::FormID gId : guardiansToRefresh) {
+                lineage.UpdateSpouseChildrenFaction(gId);
+            }
+        }
     }
 
     void RelationshipUseCases::UpdateAllSpousesChildrenFaction() {

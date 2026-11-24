@@ -30,7 +30,12 @@ namespace MARAS::Bridge::Ui {
 
         const nlohmann::json spec = request.ToJson(modalId);
         std::string specJson = spec.dump(-1, ' ', false, nlohmann::json::error_handler_t::replace);
-        return EnqueueEntry(std::move(modalId), std::move(specJson), std::move(buttonIds), std::move(callback));
+        return EnqueueEntry(
+            std::move(modalId),
+            std::move(specJson),
+            std::move(buttonIds),
+            request.defaultCancelButtonIndex,
+            std::move(callback));
     }
 
     std::string ModalManager::ShowRawJsonModal(
@@ -41,6 +46,7 @@ namespace MARAS::Bridge::Ui {
             MARAS_LOG_ERROR("[ModalManager] Rejected malformed raw modal JSON payload");
             if (callback) {
                 ModalResponse errResp;
+                errResp.buttonIndex = 1;
                 errResp.aborted = true;
                 callback(errResp);
             }
@@ -54,6 +60,12 @@ namespace MARAS::Bridge::Ui {
         if (modalId.empty()) {
             modalId = std::format("modal_{}", nextId_.fetch_add(1, std::memory_order_relaxed));
             parsed["modalId"] = modalId;
+        }
+
+        std::int32_t defaultCancelIndex = 1;
+        if (auto it = parsed.find("defaultCancelButtonIndex");
+            it != parsed.end() && it->is_number_integer()) {
+            defaultCancelIndex = it->get<std::int32_t>();
         }
 
         std::vector<std::string> buttonIds;
@@ -71,39 +83,42 @@ namespace MARAS::Bridge::Ui {
         }
 
         std::string dumped = parsed.dump(-1, ' ', false, nlohmann::json::error_handler_t::replace);
-        return EnqueueEntry(std::move(modalId), std::move(dumped), std::move(buttonIds), std::move(callback));
+        return EnqueueEntry(
+            std::move(modalId),
+            std::move(dumped),
+            std::move(buttonIds),
+            defaultCancelIndex,
+            std::move(callback));
     }
 
     std::string ModalManager::EnqueueEntry(
         std::string modalId,
         std::string specJson,
         std::vector<std::string> buttonIds,
+        std::int32_t defaultCancelButtonIndex,
         ModalCallback callback) {
-        ModalEntry entry;
-        entry.modalId = modalId;
-        entry.specJson = std::move(specJson);
-        entry.buttonIds = std::move(buttonIds);
-        entry.callback = std::move(callback);
-        entry.expectedEpoch = MARAS::State::GetSessionEpoch();
+        const std::uint64_t token = nextId_.fetch_add(1, std::memory_order_relaxed);
+        MARAS::State::ModalQueueItem item;
+        item.token = token;
+        item.modalId = modalId;
+        item.specJson = std::move(specJson);
+        item.buttonIds = std::move(buttonIds);
+        item.defaultCancelButtonIndex = defaultCancelButtonIndex;
+        item.expectedEpoch = MARAS::State::GetSessionEpoch();
 
-        bool pushedActive = false;
-        std::size_t queueSize = 0;
+        MARAS::State::ModalEnqueueOutcome out{};
         {
             std::lock_guard lock(mutex_);
-            if (!activeModal_.has_value()) {
-                activeModal_ = std::move(entry);
-                lastSentModalId_.clear();
-                pushedActive = true;
-            } else {
-                queue_.push_back(std::move(entry));
-                queueSize = queue_.size();
+            if (callback) {
+                callbacks_.emplace(token, std::move(callback));
             }
+            out = queueState_.Enqueue(std::move(item));
         }
 
-        if (pushedActive) {
+        if (out.activatedImmediately) {
             MARAS_LOG_DEBUG("[ModalManager] Activated modal '{}'", modalId);
         } else {
-            MARAS_LOG_DEBUG("[ModalManager] Queued modal '{}' (pending={})", modalId, queueSize);
+            MARAS_LOG_DEBUG("[ModalManager] Queued modal '{}' (pending={})", modalId, out.pendingQueueSize);
         }
 
         ScheduleProcessQueue();
@@ -118,54 +133,61 @@ namespace MARAS::Bridge::Ui {
 
     bool ModalManager::HasActiveModal() const {
         std::lock_guard lock(mutex_);
-        return activeModal_.has_value();
+        return queueState_.HasActiveOrQueued();
     }
 
     std::string ModalManager::GetActiveModalId() const {
         std::lock_guard lock(mutex_);
-        return activeModal_ ? activeModal_->modalId : std::string{};
+        return queueState_.GetActiveModalId();
     }
 
     void ModalManager::SendActiveModalToUI(bool forceResend) {
-        std::string specJson;
-        std::string modalId;
-        {
-            std::lock_guard lock(mutex_);
-            if (!activeModal_.has_value()) {
-                return;
-            }
-            if (!forceResend && lastSentModalId_ == activeModal_->modalId) {
-                return;
-            }
-            modalId = activeModal_->modalId;
-            specJson = activeModal_->specJson;
-            lastSentModalId_ = modalId;
+        auto& uiMgr = UIManager::GetSingleton();
+        if (!uiMgr.IsInitialized() || !uiMgr.IsDomReady() || uiMgr.IsModalDisplayBlocked()) {
+            return;
         }
 
-        MARAS_LOG_DEBUG("[ModalManager] Sending modal '{}' to UI (force={})", modalId, forceResend);
-        UIManager::GetSingleton().SendToUI("showMARASModal", specJson);
+        std::optional<MARAS::State::ModalSendPayload> payload;
+        {
+            std::lock_guard lock(mutex_);
+            payload = queueState_.TakePayloadToSend(forceResend);
+        }
+        if (!payload.has_value()) {
+            return;
+        }
+
+        MARAS_LOG_DEBUG("[ModalManager] Sending modal '{}' to UI (force={})", payload->modalId, forceResend);
+        uiMgr.SendToUI("showMARASModal", payload->specJson);
     }
 
     void ModalManager::ProcessQueueOnGameThread() {
-        bool hasActive = false;
-        std::string promotedId;
+        auto& uiMgr = UIManager::GetSingleton();
+        if (!uiMgr.IsInitialized()) {
+            uiMgr.Initialize();
+        }
+        if (!uiMgr.IsInitialized()) {
+            AbortAllModals("Magelight UI view unavailable");
+            return;
+        }
+
+        MARAS::State::ModalPromoteOutcome outcome{};
         {
             std::lock_guard lock(mutex_);
-            if (!activeModal_.has_value() && !queue_.empty()) {
-                activeModal_ = std::move(queue_.front());
-                queue_.pop_front();
-                lastSentModalId_.clear();
-                promotedId = activeModal_->modalId;
+            outcome = queueState_.PruneAndPromote(MARAS::State::GetSessionEpoch());
+            for (const std::uint64_t staleToken : outcome.droppedStaleTokens) {
+                callbacks_.erase(staleToken);
             }
-            hasActive = activeModal_.has_value();
         }
 
-        if (!promotedId.empty()) {
-            MARAS_LOG_DEBUG("[ModalManager] Promoted queued modal '{}' to active", promotedId);
+        if (!outcome.droppedStaleTokens.empty()) {
+            MARAS_LOG_DEBUG("[ModalManager] Dropped {} stale modal(s) from prior epoch",
+                            outcome.droppedStaleTokens.size());
+        }
+        if (!outcome.promotedModalId.empty()) {
+            MARAS_LOG_DEBUG("[ModalManager] Promoted queued modal '{}' to active", outcome.promotedModalId);
         }
 
-        auto& uiMgr = UIManager::GetSingleton();
-        if (hasActive && !uiMgr.IsModalDisplayBlocked()) {
+        if (outcome.hasActive && uiMgr.IsDomReady() && !uiMgr.IsModalDisplayBlocked()) {
             SendActiveModalToUI(false);
         }
         uiMgr.SyncViewVisibilityAndFocus();
@@ -206,46 +228,62 @@ namespace MARAS::Bridge::Ui {
             values = *it;
         }
 
-        ModalEntry resolved;
+        MARAS::State::ModalResolveOutcome resolved{};
+        ModalCallback resolvedCallback;
         {
             std::lock_guard lock(mutex_);
-            if (!activeModal_.has_value() || activeModal_->modalId != incomingId) {
+            resolved = queueState_.ResolveActive(
+                incomingId, buttonId, buttonIndex, aborted, MARAS::State::GetSessionEpoch());
+            if (!resolved.matched) {
                 MARAS_LOG_WARN("[ModalManager] Ignored modalResponse for inactive/mismatched modal '{}'",
                                incomingId);
                 return false;
             }
-            resolved = std::move(*activeModal_);
-            activeModal_.reset();
-            lastSentModalId_.clear();
+            if (const auto it = callbacks_.find(resolved.resolved.token); it != callbacks_.end()) {
+                resolvedCallback = std::move(it->second);
+                callbacks_.erase(it);
+            }
+            for (const std::uint64_t staleToken : resolved.droppedStaleTokens) {
+                callbacks_.erase(staleToken);
+            }
         }
 
-        MARAS_LOG_DEBUG("[ModalManager] Resolved modal '{}' (button='{}', aborted={})",
-                        resolved.modalId,
+        MARAS_LOG_DEBUG("[ModalManager] Resolved modal '{}' (button='{}', aborted={}, remaining={})",
+                        resolved.resolved.modalId,
                         buttonId,
-                        aborted);
+                        aborted,
+                        resolved.hasMoreModals ? 1 : 0);
 
-        UIManager::GetSingleton().SendToUI("clearMARASModal", "");
-        ScheduleProcessQueue();
-
-        if (resolved.callback) {
-            if (MARAS::State::IsSessionEpochCurrent(resolved.expectedEpoch)) {
-                if (buttonIndex < 0 && !buttonId.empty()) {
-                    for (std::size_t i = 0; i < resolved.buttonIds.size(); ++i) {
-                        if (resolved.buttonIds[i] == buttonId) {
-                            buttonIndex = static_cast<std::int32_t>(i);
-                            break;
-                        }
-                    }
+        auto& uiMgr = UIManager::GetSingleton();
+        if (resolved.hasMoreModals) {
+            MARAS_LOG_DEBUG("[ModalManager] Synchronously promoted queued modal '{}' to active",
+                            resolved.promotedModalId);
+            if (!uiMgr.IsInitialized()) {
+                AbortAllModals("Magelight UI view unavailable");
+            } else {
+                if (uiMgr.IsDomReady() && !uiMgr.IsModalDisplayBlocked()) {
+                    SendActiveModalToUI(false);
                 }
+                uiMgr.SyncViewVisibilityAndFocus();
+            }
+        } else {
+            if (uiMgr.IsDomReady()) {
+                uiMgr.SendToUI("clearMARASModal", "");
+            }
+            uiMgr.SyncViewVisibilityAndFocus();
+        }
+
+        if (resolvedCallback) {
+            if (resolved.callbackEpochValid) {
                 ModalResponse response;
-                response.modalId = std::move(resolved.modalId);
+                response.modalId = std::move(resolved.resolved.modalId);
                 response.buttonId = std::move(buttonId);
-                response.buttonIndex = buttonIndex;
+                response.buttonIndex = resolved.resolvedButtonIndex;
                 response.aborted = aborted;
                 response.values = std::move(values);
                 response.rawPayload = payload;
                 try {
-                    resolved.callback(response);
+                    resolvedCallback(response);
                 } catch (const std::exception& e) {
                     MARAS_LOG_ERROR("[ModalManager] Exception in modal callback '{}': {}",
                                     response.modalId,
@@ -257,8 +295,8 @@ namespace MARAS::Bridge::Ui {
             } else {
                 MARAS_LOG_DEBUG(
                     "[ModalManager] Dropped stale modal callback '{}' (expectedEpoch={}, currentEpoch={})",
-                    resolved.modalId,
-                    resolved.expectedEpoch,
+                    resolved.resolved.modalId,
+                    resolved.resolved.expectedEpoch,
                     MARAS::State::GetSessionEpoch());
             }
         }
@@ -266,46 +304,59 @@ namespace MARAS::Bridge::Ui {
         return true;
     }
 
-    void ModalManager::Revert() {
-        std::vector<ModalEntry> cancelled;
+    void ModalManager::AbortAllModals(const char* reason) {
+        std::vector<std::pair<MARAS::State::ModalQueueItem, ModalCallback>> cancelled;
         {
             std::lock_guard lock(mutex_);
-            if (activeModal_.has_value()) {
-                cancelled.push_back(std::move(*activeModal_));
-                activeModal_.reset();
+            auto items = queueState_.AbortAll();
+            cancelled.reserve(items.size());
+            for (auto& item : items) {
+                ModalCallback cb;
+                if (const auto it = callbacks_.find(item.token); it != callbacks_.end()) {
+                    cb = std::move(it->second);
+                    callbacks_.erase(it);
+                }
+                cancelled.emplace_back(std::move(item), std::move(cb));
             }
-            while (!queue_.empty()) {
-                cancelled.push_back(std::move(queue_.front()));
-                queue_.pop_front();
-            }
-            lastSentModalId_.clear();
+            callbacks_.clear();
         }
 
-        if (!cancelled.empty()) {
-            MARAS_LOG_INFO("[ModalManager] Reverting {} active/queued modal(s)", cancelled.size());
+        if (cancelled.empty()) {
+            return;
         }
 
-        for (auto& entry : cancelled) {
-            if (!entry.callback) {
+        MARAS_LOG_WARN("[ModalManager] Aborting {} active/queued modal(s) ({})",
+                       cancelled.size(),
+                       reason ? reason : "unavailable");
+
+        for (auto& [item, cb] : cancelled) {
+            if (!cb) {
                 continue;
             }
             ModalResponse abortedResp;
-            abortedResp.modalId = std::move(entry.modalId);
+            abortedResp.modalId = std::move(item.modalId);
+            abortedResp.buttonIndex = item.defaultCancelButtonIndex;
             abortedResp.aborted = true;
             try {
-                entry.callback(abortedResp);
+                cb(abortedResp);
             } catch (const std::exception& e) {
-                MARAS_LOG_ERROR("[ModalManager] Exception aborting modal '{}' on revert: {}",
+                MARAS_LOG_ERROR("[ModalManager] Exception aborting modal '{}': {}",
                                 abortedResp.modalId,
                                 e.what());
             } catch (...) {
-                MARAS_LOG_ERROR("[ModalManager] Unknown exception aborting modal '{}' on revert",
+                MARAS_LOG_ERROR("[ModalManager] Unknown exception aborting modal '{}'",
                                 abortedResp.modalId);
             }
         }
+    }
+
+    void ModalManager::Revert() {
+        AbortAllModals("save revert");
 
         auto& uiMgr = UIManager::GetSingleton();
-        uiMgr.SendToUI("clearMARASModal", "");
+        if (uiMgr.IsDomReady()) {
+            uiMgr.SendToUI("clearMARASModal", "");
+        }
         uiMgr.SyncViewVisibilityAndFocus();
     }
 

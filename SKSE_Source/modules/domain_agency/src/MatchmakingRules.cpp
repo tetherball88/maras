@@ -65,9 +65,6 @@ namespace MARAS::Domain::Agency {
         if (snap.deceased && snap.deceased->IsDeceased(actorId)) {
             return false;
         }
-        if (snap.actors && !snap.actors->IsRegisteredAdult(actorId.AsRefId())) {
-            return false;
-        }
         if (snap.relationships) {
             const auto playerStatus = snap.relationships->GetStatus(ActorId::Player(), actorId);
             if (Foundation::IsMainTierStatus(playerStatus)) {
@@ -84,32 +81,97 @@ namespace MARAS::Domain::Agency {
         bool canFormMain,
         bool hasOpenMain) noexcept {
         if (canFormMain) {
-            return "[eligible: main/secondary]";
+            return "can form main";
         }
         if (hasOpenMain) {
-            return "[open main: secondary allowed]";
+            return "secondary only (allowed)";
         }
-        return "[secondary only (cheating)]";
+        return "secondary only (cheating)";
     }
 
     std::string_view GetOrientationRuleText(
         MatchmakingOrientation orientation) noexcept {
         switch (orientation) {
             case MatchmakingOrientation::Heterosexual:
-                return "Heterosexual pairs only (male + female).";
+                return "Heterosexual only: ONLY pair different-sex NPCs (male + female). Do NOT pair same-sex NPCs.";
             case MatchmakingOrientation::Homosexual:
-                return "Same-sex pairs only (male + male or female + female).";
+                return "Homosexual only: ONLY pair same-sex NPCs (male + male OR female + female). Do NOT pair different-sex NPCs.";
             case MatchmakingOrientation::Gay:
-                return "Male + male pairs only.";
+                return "Gay (male-male) only: ONLY pair male NPCs with other male NPCs. Do NOT pair female NPCs.";
             case MatchmakingOrientation::Lesbian:
-                return "Female + female pairs only.";
+                return "Lesbian (female-female) only: ONLY pair female NPCs with other female NPCs. Do NOT pair male NPCs.";
             case MatchmakingOrientation::HeteroAndGay:
-                return "Heterosexual or male + male pairs.";
+                return "Heterosexual and Gay: ONLY pair different-sex NPCs (male + female) OR male same-sex NPCs (male + male). Do NOT pair female same-sex NPCs.";
             case MatchmakingOrientation::HeteroAndLesbian:
-                return "Heterosexual or female + female pairs.";
+                return "Heterosexual and Lesbian: ONLY pair different-sex NPCs (male + female) OR female same-sex NPCs (female + female). Do NOT pair male same-sex NPCs.";
             case MatchmakingOrientation::Any:
             default:
-                return "Any gender pairing is allowed.";
+                return "Any orientation: Pairing any combination of sexes (heterosexual or homosexual) is allowed.";
+        }
+    }
+
+    std::string BuildAllowedOperationsText(
+        bool allowBreakups,
+        bool allowOpenClose) {
+        std::string out =
+            "- **Create new relationships** (dating, lover — mark whether lover is allowed or considered cheating)\n"
+            "- **Advance existing relationships** (dating->engaged, engaged->married, lover->dating, lover->engaged)";
+        if (allowBreakups) {
+            out += "\n- **Break up existing relationships** (to exdating, exlover, divorced, jilted)";
+        }
+        if (allowOpenClose) {
+            out += "\n- **Open or close relationships** (switch between open and exclusive)";
+        }
+        return out;
+    }
+
+    std::string BuildAllowedActionsString(
+        bool allowBreakups,
+        bool allowOpenClose) {
+        std::string out = "new|advance";
+        if (allowBreakups) {
+            out += "|breakup";
+        }
+        if (allowOpenClose) {
+            out += "|open|close";
+        }
+        return out;
+    }
+
+    std::string_view BuildCheatingRuleText(bool allowCheating) noexcept {
+        if (!allowCheating) {
+            return "Cheating/infidelity is DISABLED by player settings. NPCs marked '[secondary only (cheating)]' (who have exclusive/closed main partners) MUST NOT be paired with any secondary partners (lover).";
+        }
+        return "Cheating/infidelity is ALLOWED. You may suggest secondary lover relationships for NPCs marked '[secondary only (cheating)]' if dramatically interesting (this creates infidelity drama).";
+    }
+
+    std::string_view BuildBreakupRuleText(bool allowBreakups) noexcept {
+        if (!allowBreakups) {
+            return "Breakups are DISABLED by mod settings. Do NOT suggest breaking up any relationships and do NOT use action 'breakup'.";
+        }
+        return "Breakups are ALLOWED. You may suggest breaking up existing relationships (action 'breakup') when appropriate.";
+    }
+
+    std::string_view BuildOpenCloseRuleText(bool allowOpenClose) noexcept {
+        if (!allowOpenClose) {
+            return "Open/close pair modifications are DISABLED by mod settings. Do NOT output actions 'open' or 'close'.";
+        }
+        return "Open/close modifications are ALLOWED. You may suggest opening (action 'open') or closing (action 'close') existing pairs.";
+    }
+
+    std::pair<std::string_view, RelationshipStatus> GetBreakupTargetStatus(
+        RelationshipStatus currentStatus) noexcept {
+        switch (currentStatus) {
+            case RelationshipStatus::Married:
+                return { "divorced", RelationshipStatus::Divorced };
+            case RelationshipStatus::Engaged:
+                return { "jilted", RelationshipStatus::Jilted };
+            case RelationshipStatus::Dating:
+                return { "exdating", RelationshipStatus::ExDating };
+            case RelationshipStatus::Lover:
+                return { "exlover", RelationshipStatus::ExLover };
+            default:
+                return { "", RelationshipStatus::Unknown };
         }
     }
 

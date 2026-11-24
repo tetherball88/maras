@@ -1748,10 +1748,25 @@ namespace MARAS {
         }
         root["entries"] = entriesJson;
 
-        nlohmann::json loadedJson = nlohmann::json::array();
+        std::vector<std::pair<RE::FormID, RE::Actor*>> loadedSnapshot;
+        loadedSnapshot.reserve(m_loadedActors.size());
         for (const auto& [refID, actor] : m_loadedActors) {
-            (void)refID;
-            if (!actor) continue;
+            if (refID != 0 && actor != nullptr) {
+                loadedSnapshot.emplace_back(refID, actor);
+            }
+        }
+        lock.unlock();
+
+        nlohmann::json loadedJson = nlohmann::json::array();
+        for (const auto& [refID, cachedActor] : loadedSnapshot) {
+            auto* form = RE::TESForm::LookupByID(refID);
+            if (!form || form != cachedActor) {
+                continue;
+            }
+            RE::Actor* actor = ValidateCachedActor(cachedActor);
+            if (!actor) {
+                continue;
+            }
             nlohmann::json lActor;
             lActor["name"] = actor->GetDisplayFullName();
             lActor["refFormId"] = fmt::format("0x{:08X}", actor->GetFormID());
@@ -1767,6 +1782,7 @@ namespace MARAS {
             lActor["position"] = { { "x", pos.x }, { "y", pos.y }, { "z", pos.z } };
             loadedJson.push_back(lActor);
         }
+        root["meta"]["loadedCount"] = loadedJson.size();
         root["loadedActors"] = loadedJson;
 
         return root;

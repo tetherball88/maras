@@ -2,14 +2,18 @@
 
 #include "maras/app/AppContext.h"
 #include "maras/app/AsyncLlmBatchRunner.h"
+#include "maras/app/HouseholdUseCases.h"
+#include "maras/app/MatchmakingContextBuilder.h"
 #include "maras/app/RelationshipUseCases.h"
 #include "maras/domain/agency/BanterPlanner.h"
 #include "maras/domain/agency/EncounterTemplate.h"
 #include "maras/domain/agency/MatchmakingRules.h"
+#include "maras/domain/agency/MatchmakingValidationRules.h"
 #include "maras/domain/agency/NpcMatchmaker.h"
 #include "maras/domain/agency/PartnerAgencyEvaluator.h"
 #include "maras/domain/relationships/InfidelityRules.h"
 #include "maras/domain/relationships/RelationshipRules.h"
+#include "maras/engine/ActorEngineUtils.h"
 #include "maras/engine/ActorService.h"
 #include "maras/engine/BanterSceneStarter.h"
 #include "maras/engine/EncounterConfigLoader.h"
@@ -73,386 +77,150 @@ namespace MARAS::App {
             return "Dragonborn";
         }
 
-        [[nodiscard]] std::string ResolveActorName(RE::FormID id) {
-            if (id == 0) {
-                return {};
+        [[nodiscard]] std::string GetJsonStringSafe(const nlohmann::json& obj,
+                                                    std::string_view key,
+                                                    std::string_view defaultVal = "") {
+            if (obj.is_object() && obj.contains(key) && obj[key].is_string()) {
+                return obj[key].get<std::string>();
             }
-            if (id == kPlayerFormID) {
-                return GetPlayerNameSafe();
-            }
-            if (auto name = SpatialWorldIndex::GetSingleton().GetName(id); !name.empty()) {
-                return name;
-            }
-            return ActorSvc::GetName(id);
+            return std::string(defaultVal);
         }
 
-        [[nodiscard]] std::string ResolveActorRaceName(RE::FormID id) {
-            if (auto* race = ActorSvc::GetRace(id)) {
-                if (const char* fullName = race->GetFullName(); fullName && fullName[0] != '\0') {
-                    return fullName;
-                }
-                if (const char* name = race->GetName(); name && name[0] != '\0') {
-                    return name;
-                }
+        [[nodiscard]] bool GetJsonBoolSafe(const nlohmann::json& obj,
+                                           std::string_view key,
+                                           bool defaultVal = false) {
+            if (obj.is_object() && obj.contains(key) && obj[key].is_boolean()) {
+                return obj[key].get<bool>();
             }
-            return "Unknown";
+            return defaultVal;
         }
 
-        [[nodiscard]] std::string SexToDisplayString(Foundation::ActorSex sex) noexcept {
-            switch (sex) {
-                case Foundation::ActorSex::Male:
-                    return "Male";
-                case Foundation::ActorSex::Female:
-                    return "Female";
-                default:
-                    return "Unknown";
-            }
+        [[nodiscard]] std::string NormalizeActionString(std::string_view raw,
+                                                        std::string_view targetStatusHint = "",
+                                                        std::optional<bool> openTargetHint = std::nullopt) {
+            return Domain::Agency::NormalizeMatchmakingAction(raw, targetStatusHint, openTargetHint);
         }
 
-        [[nodiscard]] Foundation::ActorSex ResolveActorSexEnum(RE::FormID id) noexcept {
-            const std::uint8_t rawSex = ActorSvc::GetSex(id);
-            if (rawSex == 0) {
-                return Foundation::ActorSex::Male;
-            }
-            if (rawSex == 1) {
-                return Foundation::ActorSex::Female;
-            }
-            return Foundation::ActorSex::Unknown;
-        }
-
-        [[nodiscard]] std::string FormatRelationshipsSummary(const State::WorldStateSnapshot& snap,
-                                                             Foundation::ActorId actorId) {
-            if (!snap.relationships || !snap.affairs) {
-                return "None";
-            }
-            std::string summary;
-            const auto active = snap.relationships->GetActivePartners(actorId);
-            for (const auto& [partnerId, status] : active) {
-                if (!summary.empty()) {
-                    summary += "\n";
-                }
-                const bool isOpen = snap.relationships->IsPairOpen(actorId, partnerId);
-                summary += std::format("- {} ({}{})",
-                                       ResolveActorName(partnerId.raw()),
-                                       Foundation::RelationshipStatusToString(status),
-                                       isOpen ? ", Open" : "");
-            }
-            for (const auto& rec : snap.affairs->GetByCheater(actorId)) {
-                if (rec.affairStatus != Foundation::AffairStatus::Ongoing) {
-                    continue;
-                }
-                if (!summary.empty()) {
-                    summary += "\n";
-                }
-                summary += std::format("- {} (Affair with, stage={}, secret={})",
-                                       ResolveActorName(rec.paramour.raw()),
-                                       Foundation::AffairStageToString(rec.affairStage),
-                                       rec.isSecret ? "yes" : "no");
-            }
-            return summary.empty() ? std::string("Single / None") : summary;
-        }
-
-        [[nodiscard]] bool IsNpcEligibleBasicEngineCheck(RE::FormID id,
-                                                         const State::WorldStateSnapshot& snap) {
-            if (id == 0 || id == kPlayerFormID || IsSyntheticChildID(id)) {
-                return false;
-            }
-            const auto* profile = snap.actors ? snap.actors->Find(Foundation::RefId{ id }) : nullptr;
-            if (!profile || !profile->isRegisteredAdult) {
-                return false;
-            }
-            if (snap.deceased && snap.deceased->IsDeceased(Foundation::ActorId{ id }, profile->baseId)) {
-                return false;
-            }
-            if (auto* actor = RE::TESForm::LookupByID<RE::Actor>(id)) {
-                if (actor->IsDead() || actor->IsDeleted() || actor->IsChild()) {
-                    return false;
-                }
-            } else if (!ActorSvc::IsValid(id)) {
-                return false;
-            }
-            return true;
-        }
-
-        [[nodiscard]] std::vector<Domain::Agency::NpcMatchmakingProfile> CollectEligibleMatchmakingProfiles(
-            const State::WorldStateSnapshot& snap,
-            float currentGameDay,
-            bool requireEligibleForScheduled) {
-            std::vector<Domain::Agency::NpcMatchmakingProfile> profiles;
-            if (!snap.actors) {
-                return profiles;
-            }
-
-            const auto& allProfiles = snap.actors->AllProfiles();
-            profiles.reserve(allProfiles.size());
-            for (const auto& [refId, rec] : allProfiles) {
-                const Foundation::ActorId actorId{ refId.raw() };
-                if (!IsNpcEligibleBasicEngineCheck(actorId.raw(), snap)) {
-                    continue;
-                }
-                if (requireEligibleForScheduled &&
-                    !Domain::Agency::IsEligibleForScheduledMatchmaking(snap, actorId, currentGameDay)) {
-                    continue;
-                }
-                Domain::Agency::NpcMatchmakingProfile p{};
-                p.actorId = actorId;
-                p.name = ResolveActorName(actorId.raw());
-                if (p.name.empty()) {
-                    continue;
-                }
-                p.sex = ResolveActorSexEnum(actorId.raw());
-                p.socialClass = rec.socialClass;
-                p.skillType = rec.skillType;
-                p.temperament = rec.temperament;
-                profiles.push_back(std::move(p));
-            }
-            return profiles;
-        }
-
-        [[nodiscard]] std::string ResolvePrimaryPartnerName(const State::WorldStateSnapshot& snap,
-                                                            Foundation::ActorId actorId,
-                                                            Foundation::ActorId& outId) {
-            outId = snap.relationships ? snap.relationships->GetPrimaryPartner(actorId) : Foundation::ActorId{};
-            if (outId.IsNull()) {
-                return {};
-            }
-            return ResolveActorName(outId.raw());
-        }
-
-        [[nodiscard]] std::string ActionKindToString(Domain::Agency::MatchmakingActionKind kind) noexcept {
-            switch (kind) {
-                case Domain::Agency::MatchmakingActionKind::New:
-                    return "new";
-                case Domain::Agency::MatchmakingActionKind::Advance:
-                    return "advance";
-                case Domain::Agency::MatchmakingActionKind::Breakup:
-                    return "breakup";
-                case Domain::Agency::MatchmakingActionKind::OpenClose:
-                    return "open_close";
-            }
-            return "new";
-        }
-
-        [[nodiscard]] std::string NormalizeActionString(std::string_view raw) {
-            const std::string lower = Foundation::StringUtils::ToLowerStd(Foundation::StringUtils::TrimView(raw));
-            if (lower == "openclose" || lower == "open_close" || lower == "open/close" || lower == "toggle_open") {
-                return "open_close";
-            }
-            if (lower == "new" || lower == "advance" || lower == "breakup") {
-                return lower;
-            }
-            return lower;
-        }
-
-        [[nodiscard]] std::string BuildAllowedActionsText(const State::SettingsData& settings) {
-            std::string out = "new|advance";
-            if (settings.matchmakingAllowBreakups) {
-                out += "|breakup";
-            }
-            if (settings.matchmakingAllowOpenClose) {
-                out += "|open_close";
-            }
-            return out;
-        }
-
-        [[nodiscard]] std::string BuildAllowedStatusesText(const State::SettingsData& settings) {
-            std::string out = "dating|lover|engaged|married";
-            if (settings.matchmakingAllowBreakups) {
-                out += "|exdating|exlover|divorced|jilted";
-            }
-            return out;
-        }
-
-        [[nodiscard]] nlohmann::json BuildRosterJsonArray(
-            const std::vector<Domain::Agency::NpcMatchmakingProfile>& pool,
-            const State::WorldStateSnapshot& snap,
-            Foundation::ActorId excludeId = Foundation::ActorId{}) {
-            nlohmann::json arr = nlohmann::json::array();
-            for (const auto& p : pool) {
-                if (!excludeId.IsNull() && p.actorId == excludeId) {
-                    continue;
-                }
-                const auto active = snap.relationships ? snap.relationships->GetActivePartners(p.actorId)
-                                                       : std::vector<std::pair<Foundation::ActorId, Foundation::RelationshipStatus>>{};
-                const bool hasMainPartner = !snap.relationships->GetPrimaryPartner(p.actorId).IsNull();
-                const bool hasOpenMain = snap.relationships->HasAnyOpenMainPair(p.actorId);
-                const bool canFormMain = !hasMainPartner;
-
-                nlohmann::json entry;
-                entry["name"] = p.name;
-                entry["formId"] = FormatFormId8Hex(p.actorId.raw());
-                entry["sex"] = SexToDisplayString(p.sex);
-                entry["race"] = ResolveActorRaceName(p.actorId.raw());
-                entry["socialClass"] = std::string(Foundation::SocialClassToString(p.socialClass));
-                entry["skillType"] = std::string(Foundation::SkillTypeToString(p.skillType));
-                entry["temperament"] = std::string(Foundation::TemperamentToString(p.temperament));
-                entry["eligibility"] = std::string(Domain::Agency::GetEligibilityCategoryString(canFormMain, hasOpenMain));
-                entry["existingPartnersCount"] = active.size();
-                arr.push_back(std::move(entry));
-            }
-            return arr;
-        }
-
-        [[nodiscard]] nlohmann::json BuildVerifyContextJson(const MatchmakingResult& cand,
-                                                            const State::WorldStateSnapshot& snap,
-                                                            float currentGameDay) {
-            const Foundation::ActorId idA{ cand.actorAFormID };
-            const Foundation::ActorId idB{ cand.actorBFormID };
-            Foundation::ActorId committedAId{};
-            Foundation::ActorId committedBId{};
-            const std::string committedAName = ResolvePrimaryPartnerName(snap, idA, committedAId);
-            const std::string committedBName = ResolvePrimaryPartnerName(snap, idB, committedBId);
-
-            auto& skyrimNet = GetSkyrimNetGateway();
-            auto appendUniqueUuid = [](nlohmann::json& arr, std::uint64_t uuid) {
-                if (uuid == 0) {
-                    return;
-                }
-                for (const auto& existing : arr) {
-                    if (existing.is_number_unsigned() && existing.get<std::uint64_t>() == uuid) {
-                        return;
+        void ResolveResultFormIDs(MatchmakingResult& result) {
+            auto& index = SpatialWorldIndex::GetSingleton();
+            if (result.actorAFormID == 0 && !result.actorAName.empty()) {
+                if (const auto entry = index.FindByName(result.actorAName, NPCFilter::AdultOnly)) {
+                    result.actorAFormID = entry->refFormID != 0 ? entry->refFormID : entry->baseFormID;
+                    if (!entry->nameDisplay.empty()) {
+                        result.actorAName = entry->nameDisplay;
                     }
                 }
-                arr.push_back(uuid);
-            };
-
-            const std::uint64_t uuidA = skyrimNet.GetActorUUID(cand.actorAFormID);
-            const std::uint64_t uuidB = skyrimNet.GetActorUUID(cand.actorBFormID);
-            const std::uint64_t committedAUuid = committedAId.IsNull() ? 0 : skyrimNet.GetActorUUID(committedAId.raw());
-            const std::uint64_t committedBUuid = committedBId.IsNull() ? 0 : skyrimNet.GetActorUUID(committedBId.raw());
-
-            nlohmann::json ctx;
-            ctx["gameDay"] = currentGameDay;
-            ctx["actorAName"] = cand.actorAName;
-            ctx["actorAFormID"] = cand.actorAFormID;
-            ctx["actorAUUID"] = uuidA;
-            ctx["actorARace"] = ResolveActorRaceName(cand.actorAFormID);
-            ctx["actorASex"] = SexToDisplayString(ResolveActorSexEnum(cand.actorAFormID));
-            ctx["actorARelationships"] = FormatRelationshipsSummary(snap, idA);
-
-            ctx["actorBName"] = cand.actorBName;
-            ctx["actorBFormID"] = cand.actorBFormID;
-            ctx["actorBUUID"] = uuidB;
-            ctx["actorBRace"] = ResolveActorRaceName(cand.actorBFormID);
-            ctx["actorBSex"] = SexToDisplayString(ResolveActorSexEnum(cand.actorBFormID));
-            ctx["actorBRelationships"] = FormatRelationshipsSummary(snap, idB);
-
-            ctx["committedPartnerAName"] = committedAName;
-            ctx["committedPartnerAUUID"] = committedAUuid;
-            ctx["committedPartnerBName"] = committedBName;
-            ctx["committedPartnerBUUID"] = committedBUuid;
-
-            ctx["action"] = cand.action;
-            ctx["targetStatus"] = cand.targetStatus;
-            ctx["isCheating"] = cand.isCheating;
-            nlohmann::json recentParticipants = nlohmann::json::array();
-            appendUniqueUuid(recentParticipants, uuidA);
-            appendUniqueUuid(recentParticipants, uuidB);
-            appendUniqueUuid(recentParticipants, committedAUuid);
-            appendUniqueUuid(recentParticipants, committedBUuid);
-            ctx["recent_events_participants"] = std::move(recentParticipants);
-            return ctx;
+            }
+            if (result.actorBFormID == 0 && !result.actorBName.empty()) {
+                if (const auto entry = index.FindByName(result.actorBName, NPCFilter::AdultOnly)) {
+                    result.actorBFormID = entry->refFormID != 0 ? entry->refFormID : entry->baseFormID;
+                    if (!entry->nameDisplay.empty()) {
+                        result.actorBName = entry->nameDisplay;
+                    }
+                }
+            }
         }
 
-        [[nodiscard]] nlohmann::json BuildMemoryBatchContextJson(const std::vector<MatchmakingResult>& matches,
-                                                                 const State::WorldStateSnapshot& snap,
-                                                                 float currentGameDay) {
-            auto& skyrimNet = GetSkyrimNetGateway();
-            nlohmann::json ctx;
-            ctx["gameDay"] = currentGameDay;
-            ctx["participants"] = nlohmann::json::array();
-            ctx["events"] = nlohmann::json::array();
-            ctx["targets"] = nlohmann::json::array();
-            ctx["recent_events_participants"] = nlohmann::json::array();
-
-            std::unordered_set<RE::FormID> seenParticipants;
-            std::unordered_set<std::uint64_t> seenUuids;
-            std::size_t evIndex = 1;
-
-            auto ensureParticipant = [&](RE::FormID formId, const std::string& displayName) {
-                if (formId == 0 || !seenParticipants.insert(formId).second) {
-                    return;
-                }
-                const std::uint64_t uuid = skyrimNet.GetActorUUID(formId);
-                if (uuid != 0 && seenUuids.insert(uuid).second) {
-                    ctx["recent_events_participants"].push_back(uuid);
-                }
-                nlohmann::json p;
-                p["name"] = displayName.empty() ? ResolveActorName(formId) : displayName;
-                p["uuid"] = uuid;
-                p["race"] = ResolveActorRaceName(formId);
-                p["sex"] = SexToDisplayString(ResolveActorSexEnum(formId));
-                p["relationships"] = FormatRelationshipsSummary(snap, Foundation::ActorId{ formId });
-                ctx["participants"].push_back(std::move(p));
-
-                nlohmann::json target;
-                target["name"] = displayName.empty() ? ResolveActorName(formId) : displayName;
-                target["formId"] = FormatFormId8Hex(formId);
-                target["roleSummary"] = "Participant in relationship update";
-                target["perspectiveNotes"] = nlohmann::json::array({ "Directly experienced the relationship event." });
-                target["knowledgeRestrictions"] = nlohmann::json::array();
-                ctx["targets"].push_back(std::move(target));
-            };
-
-            for (const auto& m : matches) {
-                if (m.skipped) {
+        [[nodiscard]] std::vector<MatchmakingResult> ParseMatchmakingJsonArray(const nlohmann::json& matchesArray) {
+            std::vector<MatchmakingResult> out;
+            if (!matchesArray.is_array()) {
+                return out;
+            }
+            out.reserve(matchesArray.size());
+            for (const auto& item : matchesArray) {
+                if (!item.is_object()) {
                     continue;
                 }
-                ensureParticipant(m.actorAFormID, m.actorAName);
-                ensureParticipant(m.actorBFormID, m.actorBName);
+                MatchmakingResult r{};
+                r.actorAName = GetJsonStringSafe(item, "actorA");
+                if (r.actorAName.empty()) r.actorAName = GetJsonStringSafe(item, "actor_a");
+                if (r.actorAName.empty()) r.actorAName = GetJsonStringSafe(item, "target");
 
-                nlohmann::json ev;
-                ev["index"] = evIndex++;
-                ev["category"] = "Relationship";
-                ev["type"] = m.action;
-                ev["location"] = "Skyrim";
-                ev["involvedNames"] = std::format("{}, {}", m.actorAName, m.actorBName);
-                ev["headline"] = std::format("{} and {} {} -> {}{}",
-                                             m.actorAName,
-                                             m.actorBName,
-                                             m.action,
-                                             m.targetStatus,
-                                             m.isCheating ? " (secret infidelity)" : "");
-                ctx["events"].push_back(std::move(ev));
+                r.actorBName = GetJsonStringSafe(item, "actorB");
+                if (r.actorBName.empty()) r.actorBName = GetJsonStringSafe(item, "actor_b");
+                if (r.actorBName.empty()) r.actorBName = GetJsonStringSafe(item, "partner");
+                if (r.actorBName.empty()) r.actorBName = GetJsonStringSafe(item, "candidate");
+                if (r.actorBName.empty()) r.actorBName = GetJsonStringSafe(item, "targetMatch");
+
+                const std::string rawTarget = Foundation::StringUtils::ToLowerStd(
+                    Foundation::StringUtils::TrimView(GetJsonStringSafe(item, "targetStatus", "")));
+                std::optional<bool> openTarget;
+                if (item.contains("openTarget") && item["openTarget"].is_boolean()) {
+                    openTarget = item["openTarget"].get<bool>();
+                }
+                r.action = NormalizeActionString(GetJsonStringSafe(item, "action", "new"), rawTarget, openTarget);
+                r.targetStatus = rawTarget;
+                if (r.targetStatus.empty()) {
+                    if (r.action == "open") {
+                        r.targetStatus = "open";
+                    } else if (r.action == "close") {
+                        r.targetStatus = "closed";
+                    } else if (r.action == "new") {
+                        r.targetStatus = "dating";
+                    }
+                }
+                r.memory = GetJsonStringSafe(item, "memory");
+                r.isCheating = GetJsonBoolSafe(item, "cheating", GetJsonBoolSafe(item, "isCheating", false));
+
+                if (!r.actorAName.empty() && !r.actorBName.empty()) {
+                    out.push_back(std::move(r));
+                }
             }
-
-            return ctx;
+            return out;
         }
 
         [[nodiscard]] ModalTone ParseModalTone(std::string_view tone) noexcept {
-            if (Foundation::StringUtils::CaseInsensitiveEquals(tone, "warning")) {
-                return ModalTone::Warning;
-            }
-            if (Foundation::StringUtils::CaseInsensitiveEquals(tone, "danger")) {
-                return ModalTone::Danger;
-            }
-            if (Foundation::StringUtils::CaseInsensitiveEquals(tone, "success")) {
-                return ModalTone::Success;
-            }
-            if (Foundation::StringUtils::CaseInsensitiveEquals(tone, "ai")) {
-                return ModalTone::Ai;
-            }
+            if (Foundation::StringUtils::CaseInsensitiveEquals(tone, "warning")) return ModalTone::Warning;
+            if (Foundation::StringUtils::CaseInsensitiveEquals(tone, "danger")) return ModalTone::Danger;
+            if (Foundation::StringUtils::CaseInsensitiveEquals(tone, "success")) return ModalTone::Success;
+            if (Foundation::StringUtils::CaseInsensitiveEquals(tone, "ai")) return ModalTone::Ai;
             return ModalTone::Default;
         }
 
         [[nodiscard]] ModalSize ParseModalSize(std::string_view size) noexcept {
-            if (Foundation::StringUtils::CaseInsensitiveEquals(size, "sm")) {
-                return ModalSize::Sm;
-            }
-            if (Foundation::StringUtils::CaseInsensitiveEquals(size, "lg")) {
-                return ModalSize::Lg;
-            }
-            if (Foundation::StringUtils::CaseInsensitiveEquals(size, "xl")) {
-                return ModalSize::Xl;
-            }
+            if (Foundation::StringUtils::CaseInsensitiveEquals(size, "sm")) return ModalSize::Sm;
+            if (Foundation::StringUtils::CaseInsensitiveEquals(size, "lg")) return ModalSize::Lg;
+            if (Foundation::StringUtils::CaseInsensitiveEquals(size, "xl")) return ModalSize::Xl;
             return ModalSize::Md;
+        }
+
+        [[nodiscard]] std::string FormatStatusDisplayLabel(Foundation::RelationshipStatus status) {
+            switch (status) {
+                case Foundation::RelationshipStatus::Dating: return "Dating";
+                case Foundation::RelationshipStatus::Lover: return "Lover";
+                case Foundation::RelationshipStatus::Engaged: return "Engaged";
+                case Foundation::RelationshipStatus::Married: return "Married";
+                case Foundation::RelationshipStatus::ExDating: return "Ex-Dating";
+                case Foundation::RelationshipStatus::ExLover: return "Ex-Lover";
+                case Foundation::RelationshipStatus::Jilted: return "Jilted";
+                case Foundation::RelationshipStatus::Divorced: return "Divorced";
+                case Foundation::RelationshipStatus::Candidate:
+                case Foundation::RelationshipStatus::Unknown:
+                default:
+                    return "Single / Unrelated";
+            }
+        }
+
+        [[nodiscard]] std::string FormatTargetStatusDisplayLabel(std::string_view targetStatus) {
+            const std::string lower = Foundation::StringUtils::ToLowerStd(targetStatus);
+            if (lower == "dating") return "Dating";
+            if (lower == "lover") return "Lover";
+            if (lower == "engaged") return "Engaged";
+            if (lower == "married") return "Married";
+            if (lower == "exdating") return "Ex-Dating";
+            if (lower == "exlover") return "Ex-Lover";
+            if (lower == "jilted") return "Jilted";
+            if (lower == "divorced") return "Divorced";
+            if (lower == "open") return "Open Relationship";
+            if (lower == "closed") return "Exclusive / Closed";
+            return std::string(targetStatus);
         }
 
         [[nodiscard]] std::string ResolveHouseDisplayName(RE::FormID houseId) {
             if (houseId == 0) {
                 return "Home";
             }
-            auto name = HouseholdEngineOps::GetSingleton().GetHouseName(houseId);
+            auto name = HouseholdEngineOps::GetHouseName(houseId);
             if (!name.empty()) {
                 return name;
             }
@@ -464,109 +232,6 @@ namespace MARAS::App {
             return "Home";
         }
 
-        struct TavernRendezvousTarget {
-            RE::FormID innLocationID{ 0 };
-            RE::FormID centerMarkerID{ 0 };
-            std::string displayName;
-            bool found{ false };
-        };
-
-        [[nodiscard]] RE::BGSLocation* FindHoldRootInChain(RE::BGSLocation* startLoc) {
-            if (!startLoc) {
-                return nullptr;
-            }
-            auto* locTypeHold = RE::TESForm::LookupByID<RE::BGSKeyword>(0x00016771u);
-            RE::BGSLocation* topMost = startLoc;
-            int depth = 0;
-            for (auto* cur = startLoc; cur != nullptr && depth < 16; cur = cur->parentLoc, ++depth) {
-                if (locTypeHold && cur->HasKeyword(locTypeHold)) {
-                    return cur;
-                }
-                topMost = cur;
-            }
-            return topMost;
-        }
-
-        [[nodiscard]] TavernRendezvousTarget FindNearbyTavernForRendezvous(RE::BGSLocation* referenceLoc) {
-            TavernRendezvousTarget target;
-            auto* dataHandler = RE::TESDataHandler::GetSingleton();
-            auto& fc = FormCache::GetSingleton();
-            auto* kwInn = fc.GetLocTypeInnKeyword();
-            auto* centerLcrt = fc.GetLocationCenterMarkerRefType();
-            if (!dataHandler || !kwInn) {
-                return target;
-            }
-
-            RE::BGSLocation* targetHold = FindHoldRootInChain(referenceLoc);
-            std::vector<TavernRendezvousTarget> sameHoldTaverns;
-            std::vector<TavernRendezvousTarget> anyTaverns;
-            std::unordered_set<RE::FormID> seenLocs;
-
-            for (auto* cell : dataHandler->interiorCells) {
-                if (!cell) {
-                    continue;
-                }
-                auto* loc = cell->GetLocation();
-                if (!loc || !loc->HasKeyword(kwInn)) {
-                    continue;
-                }
-                const RE::FormID locId = loc->GetFormID();
-                if (locId == 0 || !seenLocs.insert(locId).second) {
-                    continue;
-                }
-
-                RE::FormID centerMarkerId = 0;
-                RE::FormID fallbackMarkerId = 0;
-                cell->ForEachReference([&](RE::TESObjectREFR* ref) {
-                    if (!ref || ref->IsDisabled() || ref->IsDeleted()) {
-                        return RE::BSContainer::ForEachResult::kContinue;
-                    }
-                    if (centerLcrt) {
-                        if (auto* lrt = ref->extraList.GetByType<RE::ExtraLocationRefType>()) {
-                            if (lrt->locRefType == centerLcrt) {
-                                centerMarkerId = ref->GetFormID();
-                                return RE::BSContainer::ForEachResult::kStop;
-                            }
-                        }
-                    }
-                    if (fallbackMarkerId == 0 && ref->IsPersistent()) {
-                        fallbackMarkerId = ref->GetFormID();
-                    }
-                    return RE::BSContainer::ForEachResult::kContinue;
-                });
-
-                const RE::FormID chosenMarker = centerMarkerId != 0 ? centerMarkerId : fallbackMarkerId;
-                if (chosenMarker == 0) {
-                    continue;
-                }
-
-                TavernRendezvousTarget cand;
-                cand.innLocationID = locId;
-                cand.centerMarkerID = chosenMarker;
-                if (const char* locName = loc->GetName(); locName && locName[0] != '\0') {
-                    cand.displayName = locName;
-                } else if (const char* cellName = cell->GetName(); cellName && cellName[0] != '\0') {
-                    cand.displayName = cellName;
-                } else {
-                    cand.displayName = "Local Inn";
-                }
-                cand.found = true;
-
-                if (targetHold && FindHoldRootInChain(loc) == targetHold) {
-                    sameHoldTaverns.push_back(cand);
-                }
-                anyTaverns.push_back(std::move(cand));
-            }
-
-            const auto& pool = !sameHoldTaverns.empty() ? sameHoldTaverns : anyTaverns;
-            if (pool.empty()) {
-                return target;
-            }
-            Foundation::DeterministicRng rng(static_cast<std::uint32_t>(std::random_device{}()));
-            const auto idx = static_cast<std::size_t>(rng.NextInt(0, static_cast<std::int32_t>(pool.size() - 1)));
-            return pool[idx];
-        }
-
         [[nodiscard]] std::string ResolveHomeArrivalScenarioId(const Domain::Agency::HomeArrivalPlan& plan,
                                                                bool isLetterScenario) {
             using Domain::Agency::HomeArrivalKind;
@@ -574,23 +239,19 @@ namespace MARAS::App {
             switch (plan.kind) {
                 case HomeArrivalKind::PendingIntentForcegreet:
                     switch (plan.intentType) {
-                        case PartnerIntentType::SuggestOpen:
-                            return "intent_suggest_open";
-                        case PartnerIntentType::SuggestClose:
-                            return "intent_suggest_close";
-                        case PartnerIntentType::ConfessTalking:
-                            return "intent_confess_talking";
-                        case PartnerIntentType::ConfessPhysical:
-                            return "intent_confess_physical";
-                        default:
-                            return "intent_suggest_open";
+                        case PartnerIntentType::SuggestOpen: return "intent_suggest_open";
+                        case PartnerIntentType::SuggestClose: return "intent_suggest_close";
+                        case PartnerIntentType::ConfessTalking: return "intent_confess_talking";
+                        case PartnerIntentType::ConfessPhysical: return "intent_confess_physical";
+                        default: return {};
                     }
                 case HomeArrivalKind::OpenDateInHouse:
-                    return isLetterScenario ? "open_date_away" : "open_in_house";
                 case HomeArrivalKind::OpenDateLetter:
                     return isLetterScenario ? "open_date_away" : "open_in_house";
+                case HomeArrivalKind::CheatingTalkingInHouse:
                 case HomeArrivalKind::CheatingTalkingLetter:
                     return isLetterScenario ? "cheating_talking_letter" : "cheating_talking_in_house";
+                case HomeArrivalKind::CheatingPhysicalInHouse:
                 case HomeArrivalKind::CheatingPhysicalLetter:
                     return isLetterScenario ? "cheating_physical_letter" : "cheating_physical_in_house";
                 default:
@@ -620,250 +281,50 @@ namespace MARAS::App {
             return modal;
         }
 
-        [[nodiscard]] std::optional<MatchmakingResult> JsonEntryToCandidate(
-            const nlohmann::json& entry,
-            const std::unordered_map<std::string, RE::FormID>& nameLookup,
-            RE::FormID forcedActorAId = 0) {
-            if (!entry.is_object()) {
-                return std::nullopt;
+        [[nodiscard]] std::size_t CountSharedChildrenWithPlayer(const State::WorldStateSnapshot& snap,
+                                                                Foundation::ActorId partnerId) noexcept {
+            if (!snap.lineage) {
+                return 0;
             }
-
-            RE::FormID idA = forcedActorAId;
-            std::string nameA;
-            if (idA == 0 && entry.contains("actorA") && entry["actorA"].is_string()) {
-                nameA = entry["actorA"].get<std::string>();
-                const auto it = nameLookup.find(Foundation::StringUtils::ToLowerStd(Foundation::StringUtils::TrimView(nameA)));
-                if (it != nameLookup.end()) {
-                    idA = it->second;
-                }
-            } else if (idA != 0) {
-                nameA = ResolveActorName(idA);
-            }
-
-            RE::FormID idB = 0;
-            std::string nameB;
-            if (entry.contains("actorB") && entry["actorB"].is_string()) {
-                nameB = entry["actorB"].get<std::string>();
-            } else if (entry.contains("targetMatch") && entry["targetMatch"].is_string()) {
-                nameB = entry["targetMatch"].get<std::string>();
-            }
-            if (!nameB.empty()) {
-                const auto it = nameLookup.find(Foundation::StringUtils::ToLowerStd(Foundation::StringUtils::TrimView(nameB)));
-                if (it != nameLookup.end()) {
-                    idB = it->second;
+            std::size_t count = 0;
+            for (const auto& [cid, rec] : snap.lineage->AllChildren()) {
+                (void)cid;
+                if (rec.stage == Foundation::ChildStage::Unborn) continue;
+                const bool hasPlayer =
+                    rec.guardians.HasGuardian(Foundation::ActorId::Player()) ||
+                    rec.bioMother.IsPlayer() ||
+                    rec.bioFather.IsPlayer();
+                const bool hasPartner =
+                    rec.guardians.HasGuardian(partnerId) ||
+                    rec.bioMother == partnerId ||
+                    rec.bioFather == partnerId;
+                if (hasPlayer && hasPartner) {
+                    ++count;
                 }
             }
-
-            if (idA == 0 || idB == 0 || idA == idB) {
-                return std::nullopt;
-            }
-
-            MatchmakingResult res{};
-            res.actorAFormID = idA;
-            res.actorBFormID = idB;
-            res.actorAName = nameA.empty() ? ResolveActorName(idA) : nameA;
-            res.actorBName = nameB.empty() ? ResolveActorName(idB) : nameB;
-            if (entry.contains("action") && entry["action"].is_string()) {
-                res.action = NormalizeActionString(entry["action"].get<std::string>());
-            } else {
-                res.action = "new";
-            }
-            if (entry.contains("targetStatus") && entry["targetStatus"].is_string()) {
-                res.targetStatus = Foundation::StringUtils::ToLowerStd(
-                    Foundation::StringUtils::TrimView(entry["targetStatus"].get<std::string>()));
-            }
-            if (entry.contains("cheating") && entry["cheating"].is_boolean()) {
-                res.isCheating = entry["cheating"].get<bool>();
-            }
-            if (res.action == "open_close" && res.targetStatus.empty()) {
-                if (entry.contains("openTarget") && entry["openTarget"].is_boolean()) {
-                    res.targetStatus = entry["openTarget"].get<bool>() ? "open" : "closed";
-                } else {
-                    res.targetStatus = "open";
-                }
-            }
-            return res;
+            return count;
         }
 
-        [[nodiscard]] std::unordered_map<std::string, RE::FormID> BuildLowerNameMap(
-            const std::vector<Domain::Agency::NpcMatchmakingProfile>& profiles) {
-            std::unordered_map<std::string, RE::FormID> out;
-            out.reserve(profiles.size());
-            for (const auto& p : profiles) {
-                if (!p.name.empty()) {
-                    out.emplace(Foundation::StringUtils::ToLowerStd(Foundation::StringUtils::TrimView(p.name)),
-                                p.actorId.raw());
+        [[nodiscard]] float GetLatestNonBreakupStartDaySafe(const State::WorldStateSnapshot& snap,
+                                                            Foundation::ActorId a,
+                                                            Foundation::ActorId b) noexcept {
+            if (!snap.relationships) return -1.0f;
+            const auto* edge = snap.relationships->FindEdge(a, b);
+            if (!edge) return -1.0f;
+            for (auto it = edge->statusHistory.rbegin(); it != edge->statusHistory.rend(); ++it) {
+                if (!Foundation::IsBreakupStatus(it->toStatus) && it->timestamp >= 0.0f) {
+                    return it->timestamp;
                 }
             }
-            return out;
-        }
-
-        [[nodiscard]] std::vector<Foundation::ActorId> CollectShortlistedParamours(
-            const State::WorldStateSnapshot& snap,
-            Foundation::ActorId partnerId,
-            std::size_t maxCandidates) {
-            std::vector<Foundation::ActorId> out;
-            if (!snap.actors || !snap.relationships || !snap.settings) {
-                return out;
-            }
-            const Foundation::ActorSex partnerSex = ResolveActorSexEnum(partnerId.raw());
-            const auto orientation = snap.settings->matchmakingOrientation;
-
-            for (const auto& [refId, rec] : snap.actors->AllProfiles()) {
-                const Foundation::ActorId candId{ refId.raw() };
-                if (candId == partnerId || candId.IsPlayer() || !rec.isRegisteredAdult) {
-                    continue;
-                }
-                if (!IsNpcEligibleBasicEngineCheck(candId.raw(), snap)) {
-                    continue;
-                }
-                if (!Domain::Agency::IsOrientationCompatible(orientation, partnerSex, ResolveActorSexEnum(candId.raw()))) {
-                    continue;
-                }
-                const auto existingToPartner = snap.relationships->GetStatus(partnerId, candId);
-                if (Foundation::IsActivePartnerStatus(existingToPartner)) {
-                    continue;
-                }
-                if (RelationshipUseCases::GetSingleton().AreFamilyMembers(partnerId.raw(), candId.raw())) {
-                    continue;
-                }
-                out.push_back(candId);
-                if (out.size() >= maxCandidates) {
-                    break;
-                }
-            }
-            return out;
+            return -1.0f;
         }
 
         struct PartnerAgencyBatchItem {
             Domain::Agency::PartnerAgencyActionPlan plan{};
-            std::string partnerName{};
-            std::string sideLoverName{};
-            std::string evalMode{};
-            bool canConfess{ false };
-            std::string affairStageStr{ "talking" };
+            PartnerAgencyContextInput ctxInput{};
             nlohmann::json contextJson{};
-            std::vector<Foundation::ActorId> shortlistedIds{};
             PartnerAgencyEvalResult result{};
         };
-
-        void ApplySinglePartnerAgencyOutcome(const PartnerAgencyBatchItem& item, float currentGameDay) {
-            using Domain::Agency::PartnerAgencyActionType;
-            const auto& plan = item.plan;
-            const RE::FormID partnerRaw = plan.partnerId.raw();
-            if (partnerRaw == 0) {
-                return;
-            }
-
-            if (plan.permanentAffectionDelta != 0) {
-                const auto snap = State::WorldStore::GetSingleton().Snapshot();
-                const int curAff = snap->affection ? snap->affection->GetPermanent(plan.partnerId, 50) : 50;
-                RelationshipUseCases::GetSingleton().SetPermanentAffection(
-                    partnerRaw, std::clamp(curAff + plan.permanentAffectionDelta, 0, 100));
-            }
-
-            switch (plan.type) {
-                case PartnerAgencyActionType::BreakupClosedAffairLover:
-                case PartnerAgencyActionType::BreakupOpenLover: {
-                    if (!item.result.willBreakup) {
-                        return;
-                    }
-                    const RE::FormID loverRaw = plan.relatedLoverId.raw();
-                    if (loverRaw != 0) {
-                        RelationshipUseCases::GetSingleton().PromoteToStatus(
-                            partnerRaw, loverRaw, Foundation::RelationshipStatus::ExLover,
-                            partnerRaw, /*bypassDifficulty=*/true, /*suppressModal=*/true);
-                    }
-                    if (plan.type == PartnerAgencyActionType::BreakupClosedAffairLover &&
-                        item.canConfess && item.result.willConfess) {
-                        State::WorldStore::GetSingleton().Modify([&](State::WorldState& ws) {
-                            const auto type = (item.affairStageStr == "talking")
-                                                  ? Foundation::PartnerIntentType::ConfessTalking
-                                                  : Foundation::PartnerIntentType::ConfessPhysical;
-                            ws.relationships.Write().SetPendingIntent(
-                                plan.partnerId,
-                                State::PendingPartnerIntentRecord{ type, currentGameDay, plan.relatedLoverId });
-                        });
-                    }
-                    break;
-                }
-                case PartnerAgencyActionType::SuggestOpenIntent:
-                case PartnerAgencyActionType::SuggestCloseIntent: {
-                    if (!item.result.willSuggest) {
-                        return;
-                    }
-                    const auto intentType = (plan.type == PartnerAgencyActionType::SuggestOpenIntent)
-                                                ? Foundation::PartnerIntentType::SuggestOpen
-                                                : Foundation::PartnerIntentType::SuggestClose;
-                    State::WorldStore::GetSingleton().Modify([&](State::WorldState& ws) {
-                        ws.relationships.Write().SetPendingIntent(
-                            plan.partnerId,
-                            State::PendingPartnerIntentRecord{ intentType, currentGameDay, Foundation::ActorId{} });
-                    });
-                    break;
-                }
-                case PartnerAgencyActionType::ConfessAffairIntent: {
-                    const auto type = (item.affairStageStr == "talking")
-                                          ? Foundation::PartnerIntentType::ConfessTalking
-                                          : Foundation::PartnerIntentType::ConfessPhysical;
-                    State::WorldStore::GetSingleton().Modify([&](State::WorldState& ws) {
-                        ws.relationships.Write().SetPendingIntent(
-                            plan.partnerId,
-                            State::PendingPartnerIntentRecord{ type, currentGameDay, plan.relatedLoverId });
-                    });
-                    break;
-                }
-                case PartnerAgencyActionType::SeekOpenLover:
-                case PartnerAgencyActionType::SeekSecretAffair:
-                case PartnerAgencyActionType::ExpiredIntentForceSuggestOpenAffair: {
-                    if (!item.result.willCheat) {
-                        return;
-                    }
-                    Foundation::ActorId chosenId = plan.relatedLoverId;
-                    if (!item.result.chosenCandidateName.empty()) {
-                        const std::string chosenLower = Foundation::StringUtils::ToLowerStd(
-                            Foundation::StringUtils::TrimView(item.result.chosenCandidateName));
-                        for (const auto candId : item.shortlistedIds) {
-                            if (Foundation::StringUtils::ToLowerStd(ResolveActorName(candId.raw())) == chosenLower) {
-                                chosenId = candId;
-                                break;
-                            }
-                        }
-                    }
-                    if (chosenId.IsNull() && !item.shortlistedIds.empty()) {
-                        chosenId = item.shortlistedIds.front();
-                    }
-                    if (chosenId.IsNull()) {
-                        return;
-                    }
-
-                    const bool isOpenPartner = (plan.type == PartnerAgencyActionType::SeekOpenLover);
-                    if (isOpenPartner) {
-                        ScopedMatchmakingApply applyScope;
-                        RelationshipUseCases::GetSingleton().PromoteToStatus(
-                            partnerRaw, chosenId.raw(), Foundation::RelationshipStatus::Lover,
-                            partnerRaw, /*bypassDifficulty=*/true, /*suppressModal=*/true);
-                    } else {
-                        State::WorldStore::GetSingleton().Modify([&](State::WorldState& ws) {
-                            ws.RecordCheatingIncident(
-                                plan.partnerId,
-                                Foundation::ActorId::Player(),
-                                chosenId,
-                                /*isSecret=*/true,
-                                Foundation::AffairType::Casual,
-                                Foundation::AffairStatus::Ongoing,
-                                Foundation::AffairStage::Talking,
-                                currentGameDay);
-                        });
-                    }
-                    MARAS_LOG_INFO("[AgencyWorkflowCoordinator] Partner agency applied: partner={:08X}, target={:08X}, open={}, reason='{}'",
-                                   partnerRaw, chosenId.raw(), isOpenPartner, item.result.reasoning);
-                    break;
-                }
-                default:
-                    break;
-            }
-        }
 
         [[nodiscard]] bool IsSceneSettingEnabledForPair(const State::SettingsData& s,
                                                         const State::WorldStateSnapshot& snap,
@@ -876,7 +337,8 @@ namespace MARAS::App {
             const Foundation::ActorId b{ idB };
             const auto status = snap.relationships->GetStatus(a, b);
             const bool isOpen = snap.relationships->IsPairOpen(a, b);
-            const bool isCheating = snap.relationships && snap.affairs && snap.affairs->HasCheatedOn(a, b);
+            // C5: Check cheater<->paramour cheating status directly, NOT victim HasCheatedOn(a, b).
+            const bool isCheating = Domain::Relationships::IsRelationshipCheating(snap, a, b);
 
             if (isCheating) {
                 return s.enableScenes_Cheating || s.enableScenes_CheatingDiscovered || s.enableScenes_CheatingCaught;
@@ -885,17 +347,26 @@ namespace MARAS::App {
                 return true;
             }
             switch (status) {
-                case Foundation::RelationshipStatus::Lover:
-                    return s.enableScenes_Lover;
-                case Foundation::RelationshipStatus::Dating:
-                    return s.enableScenes_Dating;
-                case Foundation::RelationshipStatus::Engaged:
-                    return s.enableScenes_Engaged;
-                case Foundation::RelationshipStatus::Married:
-                    return s.enableScenes_Married;
-                default:
-                    return false;
+                case Foundation::RelationshipStatus::Lover: return s.enableScenes_Lover;
+                case Foundation::RelationshipStatus::Dating: return s.enableScenes_Dating;
+                case Foundation::RelationshipStatus::Engaged: return s.enableScenes_Engaged;
+                case Foundation::RelationshipStatus::Married: return s.enableScenes_Married;
+                default: return false;
             }
+        }
+
+        [[nodiscard]] bool HasAnyInteriorInnInWorld() {
+            auto* dataHandler = RE::TESDataHandler::GetSingleton();
+            auto* kwInn = FormCache::GetSingleton().GetLocTypeInnKeyword();
+            if (!dataHandler || !kwInn) {
+                return false;
+            }
+            for (auto* cell : dataHandler->interiorCells) {
+                if (cell && cell->GetLocation() && cell->GetLocation()->HasKeyword(kwInn)) {
+                    return true;
+                }
+            }
+            return false;
         }
 
     }  // namespace
@@ -913,9 +384,17 @@ namespace MARAS::App {
         return runningPartnerAgency_.load(std::memory_order_acquire);
     }
 
-    void AgencyWorkflowCoordinator::ClearRunningBatchState() noexcept {
+    void AgencyWorkflowCoordinator::ClearMatchmakingRunning() noexcept {
         runningMatchmaking_.store(false, std::memory_order_release);
+    }
+
+    void AgencyWorkflowCoordinator::ClearPartnerAgencyRunning() noexcept {
         runningPartnerAgency_.store(false, std::memory_order_release);
+    }
+
+    void AgencyWorkflowCoordinator::ClearRunningBatchState() noexcept {
+        ClearMatchmakingRunning();
+        ClearPartnerAgencyRunning();
     }
 
     // =========================================================================
@@ -926,14 +405,25 @@ namespace MARAS::App {
         if (npcFormID == 0 || npcFormID == kPlayerFormID) {
             return;
         }
-        State::WorldStore::GetSingleton().Modify([npcFormID, currentGameDay](State::WorldState& ws) {
-            ws.cooldowns.Write().npcLastMatchmakingChangeDay[Foundation::ActorId{ npcFormID }] = currentGameDay;
+        const RE::FormID ref = SpatialWorldIndex::GetSingleton().GetRefID(npcFormID);
+        const RE::FormID canonicalId = (ref != 0) ? ref : npcFormID;
+        State::WorldStore::GetSingleton().Modify([canonicalId, currentGameDay](State::WorldState& ws) {
+            ws.cooldowns.Write().npcLastMatchmakingChangeDay[Foundation::ActorId{ canonicalId }] = currentGameDay;
         });
     }
 
     bool AgencyWorkflowCoordinator::IsNpcOnCooldown(RE::FormID npcFormID, float currentGameDay) const {
+        if (npcFormID == 0 || npcFormID == kPlayerFormID) {
+            return false;
+        }
         const auto snap = State::WorldStore::GetSingleton().Snapshot();
-        return Domain::Agency::IsNpcOnMatchmakingCooldown(*snap, Foundation::ActorId{ npcFormID }, currentGameDay);
+        const RE::FormID ref = SpatialWorldIndex::GetSingleton().GetRefID(npcFormID);
+        const RE::FormID canonicalId = (ref != 0) ? ref : npcFormID;
+        if (Domain::Agency::IsNpcOnMatchmakingCooldown(*snap, Foundation::ActorId{ canonicalId }, currentGameDay)) {
+            return true;
+        }
+        return canonicalId != npcFormID &&
+               Domain::Agency::IsNpcOnMatchmakingCooldown(*snap, Foundation::ActorId{ npcFormID }, currentGameDay);
     }
 
     int AgencyWorkflowCoordinator::GetNpcCooldownRemaining(RE::FormID npcFormID, float currentGameDay) const {
@@ -941,7 +431,12 @@ namespace MARAS::App {
         if (!snap->settings || !snap->cooldowns || snap->settings->matchmakingNpcCooldownDays <= 0) {
             return 0;
         }
-        const auto it = snap->cooldowns->npcLastMatchmakingChangeDay.find(Foundation::ActorId{ npcFormID });
+        const RE::FormID ref = SpatialWorldIndex::GetSingleton().GetRefID(npcFormID);
+        const RE::FormID canonicalId = (ref != 0) ? ref : npcFormID;
+        auto it = snap->cooldowns->npcLastMatchmakingChangeDay.find(Foundation::ActorId{ canonicalId });
+        if (it == snap->cooldowns->npcLastMatchmakingChangeDay.end() && canonicalId != npcFormID) {
+            it = snap->cooldowns->npcLastMatchmakingChangeDay.find(Foundation::ActorId{ npcFormID });
+        }
         if (it == snap->cooldowns->npcLastMatchmakingChangeDay.end()) {
             return 0;
         }
@@ -1003,7 +498,7 @@ namespace MARAS::App {
             return;
         }
 
-        // Caller-level SkyrimNet runtime gate: evaluate availability before rolling or gathering LLM context.
+        // Caller-level SkyrimNet runtime gate
         if (GetSkyrimNetGateway().IsAvailable() && snap->settings->matchmakingUseLLM) {
             RunLLMScheduledMatchmaking(currentGameDay);
         } else {
@@ -1018,47 +513,39 @@ namespace MARAS::App {
 
         const auto snap = State::WorldStore::GetSingleton().Snapshot();
         if (!snap->settings || !GetSkyrimNetGateway().IsAvailable()) {
-            runningMatchmaking_.store(false, std::memory_order_release);
+            ClearMatchmakingRunning();
             return;
         }
 
-        const auto eligibleNpcs = CollectEligibleMatchmakingProfiles(*snap, currentGameDay, true);
-        if (eligibleNpcs.size() < 2) {
+        nlohmann::json ctx = BuildScheduledMatchmakingContextJson(*snap, currentGameDay);
+        const std::size_t npcsCount = ctx.contains("npcsCount") && ctx["npcsCount"].is_number_unsigned()
+                                          ? ctx["npcsCount"].get<std::size_t>()
+                                          : 0;
+        if (npcsCount < 2) {
             MARAS_LOG_DEBUG("[AgencyWorkflowCoordinator] RunLLMScheduledMatchmaking: fewer than 2 eligible NPCs ({})",
-                            eligibleNpcs.size());
+                            npcsCount);
             SetLastMatchmakingDay(currentGameDay);
-            runningMatchmaking_.store(false, std::memory_order_release);
+            ClearMatchmakingRunning();
             return;
         }
-
-        nlohmann::json ctx;
-        ctx["gameDay"] = currentGameDay;
-        ctx["maxSuggestions"] = std::max(1, snap->settings->matchmakingMaxSuggestions);
-        ctx["orientationRules"] = std::string(Domain::Agency::GetOrientationRuleText(snap->settings->matchmakingOrientation));
-        ctx["allowBreakups"] = snap->settings->matchmakingAllowBreakups;
-        ctx["allowOpenClose"] = snap->settings->matchmakingAllowOpenClose;
-        ctx["allowCheating"] = snap->settings->matchmakingAllowCheating;
-        ctx["allowedActions"] = BuildAllowedActionsText(*snap->settings);
-        ctx["allowedStatuses"] = BuildAllowedStatusesText(*snap->settings);
-        ctx["npcs"] = BuildRosterJsonArray(eligibleNpcs, *snap);
 
         struct ScheduledPayload {
             nlohmann::json contextJson;
             nlohmann::json parsedResponse;
         };
 
-        auto nameLookup = BuildLowerNameMap(eligibleNpcs);
         const MatchBatchOptions opts{
             .currentGameDay = currentGameDay,
             .isGlobal = true,
             .isManual = false,
+            .isPartnerAgency = false,
             .skipConfirmationModal = false
         };
 
         LlmBatchCallbacks<ScheduledPayload> callbacks;
         callbacks.submitTask = [](ScheduledPayload& payload, auto reportDone) -> bool {
             return GetSkyrimNetGateway().SendCustomPromptToLLM(
-                "maras_evaluations\\maras_matchmaking_scheduled",
+                "maras_evaluations/maras_matchmaking_scheduled",
                 "gamemaster_evaluation",
                 payload.contextJson.dump(-1, ' ', false, nlohmann::json::error_handler_t::replace),
                 [reportDone = std::move(reportDone)](const char* rawResp, int success) {
@@ -1079,27 +566,41 @@ namespace MARAS::App {
         callbacks.formatFailureLine = [](const ScheduledPayload&, const std::string& reason) {
             return std::format("Scheduled Matchmaking: {}", reason);
         };
-        callbacks.onAllResolved = [this, opts, nameLookup = std::move(nameLookup)](
-                                      const std::shared_ptr<LlmBatchState<ScheduledPayload>>& state) {
+        callbacks.onAllResolved = [this, opts](const std::shared_ptr<LlmBatchState<ScheduledPayload>>& state) {
             SetLastMatchmakingDay(opts.currentGameDay);
 
-            std::vector<MatchmakingResult> candidates;
             const auto snapNow = State::WorldStore::GetSingleton().Snapshot();
+            auto& relUseCases = RelationshipUseCases::GetSingleton();
+            std::set<RE::FormID> seenActorsInBatch;
+            std::vector<MatchmakingResult> candidates;
+
             for (const auto& item : state->tasks) {
                 if (!item.success || !item.payload.parsedResponse.contains("matches")) {
                     continue;
                 }
-                for (const auto& m : item.payload.parsedResponse["matches"]) {
-                    if (auto cand = JsonEntryToCandidate(m, nameLookup)) {
-                        (void)ValidateCandidate(*cand, *snapNow, opts.currentGameDay);
-                        candidates.push_back(std::move(*cand));
+                for (auto& cand : ParseMatchmakingJsonArray(item.payload.parsedResponse["matches"])) {
+                    ResolveResultFormIDs(cand);
+                    if (cand.actorAFormID == 0 || cand.actorBFormID == 0) continue;
+                    if (seenActorsInBatch.contains(cand.actorAFormID) || seenActorsInBatch.contains(cand.actorBFormID)) {
+                        continue;
+                    }
+                    if (relUseCases.IsPlayerActiveMainPartner(cand.actorAFormID) ||
+                        relUseCases.IsPlayerActiveMainPartner(cand.actorBFormID)) {
+                        continue;
+                    }
+                    cand.isCheating = IsPairCheatingTransition(
+                        *snapNow, cand.actorAFormID, cand.actorBFormID, cand.targetStatus);
+                    if (ValidateCandidate(cand, *snapNow, opts.currentGameDay, /*checkCooldown=*/true)) {
+                        seenActorsInBatch.insert(cand.actorAFormID);
+                        seenActorsInBatch.insert(cand.actorBFormID);
+                        candidates.push_back(std::move(cand));
                     }
                 }
             }
 
             if (candidates.empty()) {
                 MARAS_LOG_INFO("[AgencyWorkflowCoordinator] LLM scheduled matchmaking returned 0 valid proposals");
-                ClearRunningBatchState();
+                ClearMatchmakingRunning();
                 return;
             }
             StartVerificationBatch(std::move(candidates), opts);
@@ -1120,46 +621,59 @@ namespace MARAS::App {
 
         const auto snap = State::WorldStore::GetSingleton().Snapshot();
         if (!snap->settings) {
-            runningMatchmaking_.store(false, std::memory_order_release);
+            ClearMatchmakingRunning();
             return;
         }
 
-        const auto eligibleNpcs = CollectEligibleMatchmakingProfiles(*snap, currentGameDay, true);
+        const auto eligibleNpcs = CollectWorldAdultMatchmakingProfiles(*snap, currentGameDay, true);
         SetLastMatchmakingDay(currentGameDay);
 
         if (eligibleNpcs.size() < 2) {
             MARAS_LOG_DEBUG("[AgencyWorkflowCoordinator] RunDiceRollMatchmaking: fewer than 2 eligible NPCs ({})",
                             eligibleNpcs.size());
-            runningMatchmaking_.store(false, std::memory_order_release);
+            ClearMatchmakingRunning();
             return;
         }
 
         Foundation::DeterministicRng rng(static_cast<std::uint32_t>(std::random_device{}()));
         const auto proposals = Domain::Agency::GenerateDiceRollProposals(*snap, eligibleNpcs, currentGameDay, rng);
 
+        std::unordered_set<RE::FormID> seenActors;
         std::vector<MatchmakingResult> candidates;
         candidates.reserve(proposals.size());
         for (const auto& p : proposals) {
+            if (seenActors.contains(p.actorA.raw()) || seenActors.contains(p.actorB.raw())) {
+                continue;
+            }
             MatchmakingResult res{};
             res.actorAFormID = p.actorA.raw();
             res.actorBFormID = p.actorB.raw();
-            res.actorAName = ResolveActorName(p.actorA.raw());
-            res.actorBName = ResolveActorName(p.actorB.raw());
-            res.action = ActionKindToString(p.slot.action);
-            res.targetStatus = (p.slot.action == Domain::Agency::MatchmakingActionKind::OpenClose)
-                                   ? (p.slot.openTarget ? std::string("open") : std::string("closed"))
-                                   : Foundation::StringUtils::ToLowerStd(
-                                         Foundation::RelationshipStatusToString(p.slot.targetStatus));
+            res.actorAName = ResolveActorNameForAgency(p.actorA.raw());
+            res.actorBName = ResolveActorNameForAgency(p.actorB.raw());
+            if (p.slot.action == Domain::Agency::MatchmakingActionKind::OpenClose) {
+                res.action = p.slot.openTarget ? "open" : "close";
+                res.targetStatus = p.slot.openTarget ? "open" : "closed";
+            } else {
+                switch (p.slot.action) {
+                    case Domain::Agency::MatchmakingActionKind::New: res.action = "new"; break;
+                    case Domain::Agency::MatchmakingActionKind::Advance: res.action = "advance"; break;
+                    case Domain::Agency::MatchmakingActionKind::Breakup: res.action = "breakup"; break;
+                    default: res.action = "new"; break;
+                }
+                res.targetStatus = Foundation::StringUtils::ToLowerStd(
+                    Foundation::RelationshipStatusToString(p.slot.targetStatus));
+            }
             res.isCheating = p.slot.isCheating;
-            (void)ValidateCandidate(res, *snap, currentGameDay);
-            if (!res.skipped) {
+            if (ValidateCandidate(res, *snap, currentGameDay, /*checkCooldown=*/true)) {
+                seenActors.insert(res.actorAFormID);
+                seenActors.insert(res.actorBFormID);
                 candidates.push_back(std::move(res));
             }
         }
 
         if (candidates.empty()) {
             MARAS_LOG_INFO("[AgencyWorkflowCoordinator] Dice-roll scheduled matchmaking generated 0 valid matches");
-            runningMatchmaking_.store(false, std::memory_order_release);
+            ClearMatchmakingRunning();
             return;
         }
 
@@ -1167,28 +681,34 @@ namespace MARAS::App {
             .currentGameDay = currentGameDay,
             .isGlobal = true,
             .isManual = false,
-            .skipConfirmationModal = !snap->settings->matchmakingConfirmResults
+            .isPartnerAgency = false,
+            .skipConfirmationModal = false
         };
-        StartMemoryBatchOrApply(std::move(candidates), opts);
+        if (GetSkyrimNetGateway().IsAvailable() && snap->settings->matchmakingEvaluationStep) {
+            StartVerificationBatch(std::move(candidates), opts);
+        } else {
+            ProceedAfterVerification(std::move(candidates), opts);
+        }
     }
 
     bool AgencyWorkflowCoordinator::RunManualMatchmaking(const std::vector<RE::FormID>& npcFormIDs) {
         if (npcFormIDs.empty()) {
+            GetUiBridgeGateway().SendMatchmakingResults({}, false);
             return false;
         }
         const auto snap = State::WorldStore::GetSingleton().Snapshot();
         if (!snap->settings || !GetSkyrimNetGateway().IsAvailable()) {
             MARAS_LOG_WARN("[AgencyWorkflowCoordinator] RunManualMatchmaking requires active SkyrimNet availability");
+            GetUiBridgeGateway().SendMatchmakingResults({}, false);
             return false;
         }
         if (runningMatchmaking_.exchange(true, std::memory_order_acq_rel)) {
             MARAS_LOG_WARN("[AgencyWorkflowCoordinator] RunManualMatchmaking skipped: batch already active");
+            GetUiBridgeGateway().SendMatchmakingResults({}, false);
             return false;
         }
 
         const float currentGameDay = GetCurrentGameDaysSafe();
-        const auto roster = CollectEligibleMatchmakingProfiles(*snap, currentGameDay, false);
-        auto nameLookup = BuildLowerNameMap(roster);
 
         struct ManualTask {
             RE::FormID targetId{ 0 };
@@ -1201,44 +721,27 @@ namespace MARAS::App {
         payloads.reserve(npcFormIDs.size());
 
         for (const RE::FormID targetId : npcFormIDs) {
-            if (!IsNpcEligibleBasicEngineCheck(targetId, *snap)) {
+            if (!IsNpcEligibleWorldAdult(targetId, *snap)) {
                 continue;
             }
-            nlohmann::json ctx;
-            ctx["gameDay"] = currentGameDay;
-            ctx["targetName"] = ResolveActorName(targetId);
-            ctx["targetMatchUUID"] = GetSkyrimNetGateway().GetActorUUID(targetId);
-            ctx["targetRace"] = ResolveActorRaceName(targetId);
-            ctx["targetSex"] = SexToDisplayString(ResolveActorSexEnum(targetId));
-            ctx["maxSuggestions"] = std::max(1, snap->settings->matchmakingMaxSuggestions);
-            ctx["allowedActions"] = BuildAllowedActionsText(*snap->settings);
-            ctx["allowedStatuses"] = BuildAllowedStatusesText(*snap->settings);
-            ctx["candidates"] = BuildRosterJsonArray(roster, *snap, Foundation::ActorId{ targetId });
-
             payloads.push_back(ManualTask{
                 .targetId = targetId,
-                .targetName = ResolveActorName(targetId),
-                .contextJson = std::move(ctx),
+                .targetName = ResolveActorNameForAgency(targetId),
+                .contextJson = BuildManualMatchmakingContextJson(*snap, targetId, currentGameDay),
                 .parsedResponse = {}
             });
         }
 
         if (payloads.empty()) {
-            runningMatchmaking_.store(false, std::memory_order_release);
+            ClearMatchmakingRunning();
+            GetUiBridgeGateway().SendMatchmakingResults({}, false);
             return false;
         }
-
-        const MatchBatchOptions opts{
-            .currentGameDay = currentGameDay,
-            .isGlobal = false,
-            .isManual = true,
-            .skipConfirmationModal = false
-        };
 
         LlmBatchCallbacks<ManualTask> callbacks;
         callbacks.submitTask = [](ManualTask& task, auto reportDone) -> bool {
             return GetSkyrimNetGateway().SendCustomPromptToLLM(
-                "maras_evaluations\\maras_matchmaking_manual",
+                "maras_evaluations/maras_matchmaking_manual",
                 "gamemaster_evaluation",
                 task.contextJson.dump(-1, ' ', false, nlohmann::json::error_handler_t::replace),
                 [targetName = task.targetName, reportDone = std::move(reportDone)](const char* rawResp, int success) {
@@ -1259,28 +762,63 @@ namespace MARAS::App {
         callbacks.formatFailureLine = [](const ManualTask& t, const std::string& reason) {
             return std::format("{} ({:08X}): {}", t.targetName, t.targetId, reason);
         };
-        callbacks.onAllResolved = [this, opts, nameLookup = std::move(nameLookup)](
-                                      const std::shared_ptr<LlmBatchState<ManualTask>>& state) {
-            std::vector<MatchmakingResult> candidates;
+        callbacks.onAllResolved = [this, currentGameDay](const std::shared_ptr<LlmBatchState<ManualTask>>& state) {
             const auto snapNow = State::WorldStore::GetSingleton().Snapshot();
+            std::vector<MatchmakingResult> dedupedResults;
+
             for (const auto& item : state->tasks) {
                 if (!item.success || !item.payload.parsedResponse.contains("matches")) {
                     continue;
                 }
-                for (const auto& m : item.payload.parsedResponse["matches"]) {
-                    if (auto cand = JsonEntryToCandidate(m, nameLookup, item.payload.targetId)) {
-                        (void)ValidateCandidate(*cand, *snapNow, opts.currentGameDay);
-                        candidates.push_back(std::move(*cand));
+                const RE::FormID targetId = item.payload.targetId;
+                const std::string targetName = item.payload.targetName;
+                std::set<RE::FormID> seenCandidateFormIDs;
+
+                for (auto& r : ParseMatchmakingJsonArray(item.payload.parsedResponse["matches"])) {
+                    ResolveResultFormIDs(r);
+
+                    bool isA = (r.actorAFormID == targetId) ||
+                               (r.actorAFormID == 0 && !targetName.empty() &&
+                                Foundation::StringUtils::CaseInsensitiveEquals(r.actorAName, targetName));
+                    const bool isB = (r.actorBFormID == targetId) ||
+                                     (r.actorBFormID == 0 && !targetName.empty() &&
+                                      Foundation::StringUtils::CaseInsensitiveEquals(r.actorBName, targetName));
+
+                    if (isB && !isA) {
+                        std::swap(r.actorAFormID, r.actorBFormID);
+                        std::swap(r.actorAName, r.actorBName);
+                        isA = true;
                     }
+                    if (!isA) {
+                        continue;
+                    }
+
+                    r.actorAFormID = targetId;
+                    if (!targetName.empty() && targetName != "None") {
+                        r.actorAName = targetName;
+                    }
+                    if (r.actorBFormID == 0 || r.actorBFormID == targetId) {
+                        continue;
+                    }
+                    if (seenCandidateFormIDs.contains(r.actorBFormID)) {
+                        continue;
+                    }
+
+                    // Manual preview: validate WITHOUT scheduled-cooldown rejection and do NOT auto-apply
+                    if (!ValidateCandidate(r, *snapNow, currentGameDay, /*checkCooldown=*/false)) {
+                        MARAS_LOG_INFO("[AgencyWorkflowCoordinator] Manual preview skipped {} <-> {}: {}",
+                                       r.actorAName, r.actorBName, r.skipReason);
+                        continue;
+                    }
+
+                    seenCandidateFormIDs.insert(r.actorBFormID);
+                    r.isCheating = IsPairCheatingTransition(*snapNow, r.actorAFormID, r.actorBFormID, r.targetStatus);
+                    dedupedResults.push_back(std::move(r));
                 }
             }
 
-            if (candidates.empty()) {
-                GetUiBridgeGateway().SendMatchmakingResults({}, opts.isGlobal);
-                ClearRunningBatchState();
-                return;
-            }
-            StartVerificationBatch(std::move(candidates), opts);
+            GetUiBridgeGateway().SendMatchmakingResults(dedupedResults, /*isGlobal=*/false);
+            ClearMatchmakingRunning();
         };
 
         RunLlmBatch<ManualTask>(
@@ -1292,55 +830,54 @@ namespace MARAS::App {
         return true;
     }
 
-    bool AgencyWorkflowCoordinator::RunGlobalMatchmaking(std::optional<std::size_t> maxResultsOverride) {
+    bool AgencyWorkflowCoordinator::RunGlobalMatchmaking(bool autoApply,
+                                                         std::optional<std::size_t> maxResultsOverride) {
         const auto snap = State::WorldStore::GetSingleton().Snapshot();
         if (!snap->settings || !GetSkyrimNetGateway().IsAvailable()) {
             MARAS_LOG_WARN("[AgencyWorkflowCoordinator] RunGlobalMatchmaking requires active SkyrimNet availability");
+            if (!autoApply) {
+                GetUiBridgeGateway().SendMatchmakingResults({}, true);
+            }
             return false;
         }
         if (runningMatchmaking_.exchange(true, std::memory_order_acq_rel)) {
             MARAS_LOG_WARN("[AgencyWorkflowCoordinator] RunGlobalMatchmaking skipped: batch already active");
+            if (!autoApply) {
+                GetUiBridgeGateway().SendMatchmakingResults({}, true);
+            }
             return false;
         }
 
         const float currentGameDay = GetCurrentGameDaysSafe();
-        const auto eligible = CollectEligibleMatchmakingProfiles(*snap, currentGameDay, false);
-        if (eligible.size() < 2) {
-            runningMatchmaking_.store(false, std::memory_order_release);
+        nlohmann::json ctx = BuildScheduledMatchmakingContextJson(*snap, currentGameDay, maxResultsOverride);
+        const std::size_t npcsCount = ctx.contains("npcsCount") && ctx["npcsCount"].is_number_unsigned()
+                                          ? ctx["npcsCount"].get<std::size_t>()
+                                          : 0;
+        if (npcsCount < 2) {
+            ClearMatchmakingRunning();
+            if (!autoApply) {
+                GetUiBridgeGateway().SendMatchmakingResults({}, true);
+            }
             return false;
         }
-
-        const std::size_t maxCount = maxResultsOverride.value_or(
-            static_cast<std::size_t>(std::max(1, snap->settings->matchmakingMaxSuggestions)));
-
-        nlohmann::json ctx;
-        ctx["gameDay"] = currentGameDay;
-        ctx["maxSuggestions"] = maxCount;
-        ctx["orientationRules"] = std::string(Domain::Agency::GetOrientationRuleText(snap->settings->matchmakingOrientation));
-        ctx["allowBreakups"] = snap->settings->matchmakingAllowBreakups;
-        ctx["allowOpenClose"] = snap->settings->matchmakingAllowOpenClose;
-        ctx["allowCheating"] = snap->settings->matchmakingAllowCheating;
-        ctx["allowedActions"] = BuildAllowedActionsText(*snap->settings);
-        ctx["allowedStatuses"] = BuildAllowedStatusesText(*snap->settings);
-        ctx["npcs"] = BuildRosterJsonArray(eligible, *snap);
 
         struct GlobalTask {
             nlohmann::json contextJson;
             nlohmann::json parsedResponse;
         };
 
-        auto nameLookup = BuildLowerNameMap(eligible);
         const MatchBatchOptions opts{
             .currentGameDay = currentGameDay,
             .isGlobal = true,
-            .isManual = true,
+            .isManual = !autoApply,
+            .isPartnerAgency = false,
             .skipConfirmationModal = false
         };
 
         LlmBatchCallbacks<GlobalTask> callbacks;
         callbacks.submitTask = [](GlobalTask& task, auto reportDone) -> bool {
             return GetSkyrimNetGateway().SendCustomPromptToLLM(
-                "maras_evaluations\\maras_matchmaking_scheduled",
+                "maras_evaluations/maras_matchmaking_scheduled",
                 "gamemaster_evaluation",
                 task.contextJson.dump(-1, ' ', false, nlohmann::json::error_handler_t::replace),
                 [reportDone = std::move(reportDone)](const char* rawResp, int success) {
@@ -1361,27 +898,50 @@ namespace MARAS::App {
         callbacks.formatFailureLine = [](const GlobalTask&, const std::string& reason) {
             return std::format("Global Matchmaking: {}", reason);
         };
-        callbacks.onAllResolved = [this, opts, nameLookup = std::move(nameLookup)](
-                                      const std::shared_ptr<LlmBatchState<GlobalTask>>& state) {
-            std::vector<MatchmakingResult> candidates;
+        callbacks.onAllResolved = [this, opts, autoApply](const std::shared_ptr<LlmBatchState<GlobalTask>>& state) {
             const auto snapNow = State::WorldStore::GetSingleton().Snapshot();
+            auto& relUseCases = RelationshipUseCases::GetSingleton();
+            std::set<RE::FormID> seenActorsInBatch;
+            std::vector<MatchmakingResult> validResults;
+
             for (const auto& item : state->tasks) {
                 if (!item.success || !item.payload.parsedResponse.contains("matches")) {
                     continue;
                 }
-                for (const auto& m : item.payload.parsedResponse["matches"]) {
-                    if (auto cand = JsonEntryToCandidate(m, nameLookup)) {
-                        (void)ValidateCandidate(*cand, *snapNow, opts.currentGameDay);
-                        candidates.push_back(std::move(*cand));
+                for (auto& r : ParseMatchmakingJsonArray(item.payload.parsedResponse["matches"])) {
+                    ResolveResultFormIDs(r);
+                    if (r.actorAFormID == 0 || r.actorBFormID == 0) continue;
+                    if (seenActorsInBatch.contains(r.actorAFormID) || seenActorsInBatch.contains(r.actorBFormID)) {
+                        continue;
                     }
+                    if (autoApply &&
+                        (relUseCases.IsPlayerActiveMainPartner(r.actorAFormID) ||
+                         relUseCases.IsPlayerActiveMainPartner(r.actorBFormID))) {
+                        continue;
+                    }
+                    r.isCheating = IsPairCheatingTransition(*snapNow, r.actorAFormID, r.actorBFormID, r.targetStatus);
+                    if (!ValidateCandidate(r, *snapNow, opts.currentGameDay, /*checkCooldown=*/autoApply)) {
+                        MARAS_LOG_INFO("[AgencyWorkflowCoordinator] Global matchmaking skipped {} <-> {}: {}",
+                                       r.actorAName, r.actorBName, r.skipReason);
+                        continue;
+                    }
+                    seenActorsInBatch.insert(r.actorAFormID);
+                    seenActorsInBatch.insert(r.actorBFormID);
+                    validResults.push_back(std::move(r));
                 }
             }
-            if (candidates.empty()) {
-                GetUiBridgeGateway().SendMatchmakingResults({}, true);
-                ClearRunningBatchState();
+
+            if (!autoApply) {
+                GetUiBridgeGateway().SendMatchmakingResults(validResults, /*isGlobal=*/true);
+                ClearMatchmakingRunning();
                 return;
             }
-            StartVerificationBatch(std::move(candidates), opts);
+
+            if (validResults.empty()) {
+                ClearMatchmakingRunning();
+                return;
+            }
+            StartVerificationBatch(std::move(validResults), opts);
         };
 
         RunLlmBatch<GlobalTask>(
@@ -1399,18 +959,40 @@ namespace MARAS::App {
         }
         const float currentGameDay = GetCurrentGameDaysSafe();
         const auto snap = State::WorldStore::GetSingleton().Snapshot();
-        const auto nameLookup = BuildLowerNameMap(CollectEligibleMatchmakingProfiles(*snap, currentGameDay, false));
+        const std::string targetName = ResolveActorNameForAgency(targetNpcId);
 
-        std::vector<MatchmakingResult> candidates;
-        for (const auto& m : matchesArray) {
-            if (auto cand = JsonEntryToCandidate(m, nameLookup, targetNpcId)) {
-                (void)ValidateCandidate(*cand, *snap, currentGameDay);
-                candidates.push_back(std::move(*cand));
+        std::set<RE::FormID> seenCandidateFormIDs;
+        std::vector<MatchmakingResult> dedupedResults;
+        for (auto& r : ParseMatchmakingJsonArray(matchesArray)) {
+            ResolveResultFormIDs(r);
+            bool isA = (r.actorAFormID == targetNpcId) ||
+                       (r.actorAFormID == 0 && !targetName.empty() &&
+                        Foundation::StringUtils::CaseInsensitiveEquals(r.actorAName, targetName));
+            const bool isB = (r.actorBFormID == targetNpcId) ||
+                             (r.actorBFormID == 0 && !targetName.empty() &&
+                              Foundation::StringUtils::CaseInsensitiveEquals(r.actorBName, targetName));
+            if (isB && !isA) {
+                std::swap(r.actorAFormID, r.actorBFormID);
+                std::swap(r.actorAName, r.actorBName);
+                isA = true;
             }
+            if (!isA) continue;
+            r.actorAFormID = targetNpcId;
+            if (!targetName.empty() && targetName != "None") {
+                r.actorAName = targetName;
+            }
+            if (r.actorBFormID == 0 || r.actorBFormID == targetNpcId || seenCandidateFormIDs.contains(r.actorBFormID)) {
+                continue;
+            }
+            if (!ValidateCandidate(r, *snap, currentGameDay, /*checkCooldown=*/false)) {
+                continue;
+            }
+            seenCandidateFormIDs.insert(r.actorBFormID);
+            r.isCheating = IsPairCheatingTransition(*snap, r.actorAFormID, r.actorBFormID, r.targetStatus);
+            dedupedResults.push_back(std::move(r));
         }
-        ApplyMatchmakingResults(
-            std::move(candidates),
-            MatchBatchOptions{ .currentGameDay = currentGameDay, .isGlobal = false, .isManual = true });
+
+        GetUiBridgeGateway().SendMatchmakingResults(dedupedResults, /*isGlobal=*/false);
     }
 
     void AgencyWorkflowCoordinator::ProcessGlobalManualResults(const nlohmann::json& matchesArray) {
@@ -1419,114 +1001,91 @@ namespace MARAS::App {
         }
         const float currentGameDay = GetCurrentGameDaysSafe();
         const auto snap = State::WorldStore::GetSingleton().Snapshot();
-        const auto nameLookup = BuildLowerNameMap(CollectEligibleMatchmakingProfiles(*snap, currentGameDay, false));
 
-        std::vector<MatchmakingResult> candidates;
-        for (const auto& m : matchesArray) {
-            if (auto cand = JsonEntryToCandidate(m, nameLookup)) {
-                (void)ValidateCandidate(*cand, *snap, currentGameDay);
-                candidates.push_back(std::move(*cand));
-            }
+        std::set<RE::FormID> seenActorsInBatch;
+        std::vector<MatchmakingResult> dedupedResults;
+        for (auto& r : ParseMatchmakingJsonArray(matchesArray)) {
+            ResolveResultFormIDs(r);
+            if (r.actorAFormID == 0 || r.actorBFormID == 0) continue;
+            if (seenActorsInBatch.contains(r.actorAFormID) || seenActorsInBatch.contains(r.actorBFormID)) continue;
+            if (!ValidateCandidate(r, *snap, currentGameDay, /*checkCooldown=*/false)) continue;
+            seenActorsInBatch.insert(r.actorAFormID);
+            seenActorsInBatch.insert(r.actorBFormID);
+            r.isCheating = IsPairCheatingTransition(*snap, r.actorAFormID, r.actorBFormID, r.targetStatus);
+            dedupedResults.push_back(std::move(r));
         }
-        ApplyMatchmakingResults(
-            std::move(candidates),
-            MatchBatchOptions{ .currentGameDay = currentGameDay, .isGlobal = true, .isManual = true });
+
+        GetUiBridgeGateway().SendMatchmakingResults(dedupedResults, /*isGlobal=*/true);
     }
 
     bool AgencyWorkflowCoordinator::ValidateCandidate(MatchmakingResult& result,
-                                                    const State::WorldStateSnapshot& snap,
-                                                    float currentGameDay) const {
-        auto reject = [&](std::string reason) {
-            result.skipped = true;
-            result.skipReason = std::move(reason);
-            return false;
-        };
+                                                      const State::WorldStateSnapshot& snap,
+                                                      float currentGameDay,
+                                                      bool checkCooldown) const {
+        ResolveResultFormIDs(result);
 
-        if (!snap.settings || !snap.relationships) {
-            return reject("World state unavailable");
-        }
-        if (result.actorAFormID == 0 || result.actorBFormID == 0 || result.actorAFormID == result.actorBFormID) {
-            return reject("Invalid actor pair");
-        }
-        if (!IsNpcEligibleBasicEngineCheck(result.actorAFormID, snap) ||
-            !IsNpcEligibleBasicEngineCheck(result.actorBFormID, snap)) {
-            return reject("One or both actors are dead, children, or unregistered");
-        }
-        if (RelationshipUseCases::GetSingleton().AreFamilyMembers(result.actorAFormID, result.actorBFormID)) {
-            return reject("Actors are family members");
-        }
+        Domain::Agency::CandidateValidationInput in{};
+        in.actorA = Foundation::ActorId{ result.actorAFormID };
+        in.actorB = Foundation::ActorId{ result.actorBFormID };
+        in.actorAName = result.actorAName;
+        in.actorBName = result.actorBName;
+        in.action = result.action;
+        in.targetStatus = result.targetStatus;
+        in.currentGameDay = currentGameDay;
+        in.checkCooldown = checkCooldown;
 
-        const Foundation::ActorId idA{ result.actorAFormID };
-        const Foundation::ActorId idB{ result.actorBFormID };
-        if (!Domain::Agency::IsOrientationCompatible(
-                snap.settings->matchmakingOrientation,
-                ResolveActorSexEnum(idA.raw()),
-                ResolveActorSexEnum(idB.raw()))) {
-            return reject("Orientation incompatibility");
-        }
+        if (result.actorAFormID != 0 && result.actorBFormID != 0 &&
+            result.actorAFormID != result.actorBFormID &&
+            result.actorAFormID != kPlayerFormID && result.actorBFormID != kPlayerFormID) {
+            in.actorAEligibleAdult = IsNpcEligibleWorldAdult(result.actorAFormID, snap);
+            in.actorBEligibleAdult = IsNpcEligibleWorldAdult(result.actorBFormID, snap);
 
-        if (Domain::Agency::IsNpcOnMatchmakingCooldown(snap, idA, currentGameDay) ||
-            Domain::Agency::IsNpcOnMatchmakingCooldown(snap, idB, currentGameDay)) {
-            return reject("One or both actors are on matchmaking cooldown");
-        }
+            auto& relUseCases = RelationshipUseCases::GetSingleton();
+            const std::string normAction = Domain::Agency::NormalizeMatchmakingAction(result.action, result.targetStatus);
+            if (normAction == "new" || normAction == "advance") {
+                in.areFamily = relUseCases.AreFamilyMembers(result.actorAFormID, result.actorBFormID, &in.familyReason);
+                in.actorASex = ResolveActorSexForAgency(result.actorAFormID);
+                in.actorBSex = ResolveActorSexForAgency(result.actorBFormID);
 
-        const auto curStatus = snap.relationships->GetStatus(idA, idB);
-        const std::string action = NormalizeActionString(result.action);
-        result.action = action;
-
-        if (action == "breakup") {
-            if (!snap.settings->matchmakingAllowBreakups) {
-                return reject("Breakups disabled in settings");
+                Foundation::RelationshipStatus targetSt = Foundation::StringToRelationshipStatus(result.targetStatus);
+                if (normAction == "new" && (targetSt == Foundation::RelationshipStatus::Candidate ||
+                                            targetSt == Foundation::RelationshipStatus::Unknown)) {
+                    targetSt = Foundation::RelationshipStatus::Dating;
+                }
+                if (targetSt != Foundation::RelationshipStatus::Unknown &&
+                    targetSt != Foundation::RelationshipStatus::Candidate) {
+                    in.canForm = relUseCases.CanFormRelationship(
+                        result.actorAFormID, result.actorBFormID, targetSt, &in.canFormReason);
+                }
+            } else if (normAction == "open") {
+                in.canOpen = relUseCases.CanOpenRelationship(result.actorAFormID, result.actorBFormID);
+            } else if (normAction == "close") {
+                in.canClose = relUseCases.CanCloseRelationship(result.actorAFormID, result.actorBFormID);
             }
-            if (!Foundation::IsActivePartnerStatus(curStatus)) {
-                return reject("Actors are not active partners");
-            }
-            return true;
         }
 
-        if (action == "open_close") {
-            if (!snap.settings->matchmakingAllowOpenClose) {
-                return reject("Open/close toggles disabled in settings");
-            }
-            if (!Foundation::IsMainTierStatus(curStatus)) {
-                return reject("Only main-tier couples can toggle open/closed");
-            }
-            return true;
-        }
-
-        const auto targetStatus = Foundation::StringToRelationshipStatus(result.targetStatus);
-        if (targetStatus == Foundation::RelationshipStatus::Unknown) {
-            return reject("Unknown target relationship status");
-        }
-
-        if (action == "advance" && !Foundation::IsActivePartnerStatus(curStatus)) {
-            return reject("Cannot advance non-active pair");
-        }
-        if (action == "new" && Foundation::IsActivePartnerStatus(curStatus)) {
-            return reject("Pair already has an active relationship");
-        }
-
-        const bool hasClosedMainA = !snap.relationships->GetPrimaryPartner(idA).IsNull() &&
-                                    !snap.relationships->HasAnyOpenMainPair(idA);
-        const bool hasClosedMainB = !snap.relationships->GetPrimaryPartner(idB).IsNull() &&
-                                    !snap.relationships->HasAnyOpenMainPair(idB);
-        const bool wouldCheat =
-            (hasClosedMainA && snap.relationships->GetPrimaryPartner(idA) != idB) ||
-            (hasClosedMainB && snap.relationships->GetPrimaryPartner(idB) != idA);
-
-        if (wouldCheat && (!snap.settings->matchmakingAllowCheating || targetStatus != Foundation::RelationshipStatus::Lover)) {
-            return reject("Cheating disallowed or invalid status for affair");
-        }
-        if (wouldCheat) {
-            result.isCheating = true;
-        }
-        return true;
+        const auto out = Domain::Agency::ValidateMatchmakingCandidate(snap, in);
+        result.action = out.normalizedAction;
+        result.targetStatus = out.normalizedTargetStatus;
+        result.isCheating = out.isCheating;
+        result.skipped = !out.valid;
+        result.skipReason = out.valid ? std::string{} : out.skipReason;
+        return out.valid;
     }
 
     void AgencyWorkflowCoordinator::StartVerificationBatch(std::vector<MatchmakingResult> candidates,
                                                            const MatchBatchOptions& opts) {
         const auto snap = State::WorldStore::GetSingleton().Snapshot();
         if (!snap->settings || !GetSkyrimNetGateway().IsAvailable() || !snap->settings->matchmakingEvaluationStep) {
+            ProceedAfterVerification(std::move(candidates), opts);
+            return;
+        }
+
+        // Check before moving to prevent use-after-move when all items are skipped!
+        const bool anyToVerify = std::any_of(candidates.begin(), candidates.end(), [](const MatchmakingResult& c) {
+            return !c.skipped;
+        });
+        if (!anyToVerify) {
             ProceedAfterVerification(std::move(candidates), opts);
             return;
         }
@@ -1540,22 +1099,14 @@ namespace MARAS::App {
 
         std::vector<VerifyTask> tasks;
         tasks.reserve(candidates.size());
-        bool anyToVerify = false;
-
         for (auto& cand : candidates) {
             VerifyTask task{};
             task.skipVerify = cand.skipped;
             if (!cand.skipped) {
                 task.contextJson = BuildVerifyContextJson(cand, *snap, opts.currentGameDay);
-                anyToVerify = true;
             }
             task.candidate = std::move(cand);
             tasks.push_back(std::move(task));
-        }
-
-        if (!anyToVerify) {
-            ProceedAfterVerification(std::move(candidates), opts);
-            return;
         }
 
         LlmBatchCallbacks<VerifyTask> callbacks;
@@ -1590,22 +1141,29 @@ namespace MARAS::App {
             verified.reserve(state->tasks.size());
             for (auto& item : state->tasks) {
                 MatchmakingResult res = item.payload.candidate;
-                if (!item.payload.skipVerify && item.success && !item.payload.evalResult.suitable) {
+                const auto decision = Domain::Agency::EvaluateVerificationBatchItem(
+                    item.payload.skipVerify,
+                    item.success,
+                    item.payload.evalResult.suitable,
+                    item.failureReason,
+                    item.payload.evalResult.reason,
+                    res.memory);
+                if (!item.payload.skipVerify && decision.skipped) {
                     res.skipped = true;
-                    res.skipReason = item.payload.evalResult.reason.empty()
-                                         ? std::string("Rejected during narrative verification")
-                                         : item.payload.evalResult.reason;
-                } else if (!item.payload.skipVerify && item.success && !item.payload.evalResult.reason.empty()) {
-                    res.memory = item.payload.evalResult.reason;
+                    res.skipReason = decision.skipReason;
+                } else if (!decision.memoryToApply.empty()) {
+                    res.memory = decision.memoryToApply;
                 }
                 verified.push_back(std::move(res));
             }
             ProceedAfterVerification(std::move(verified), opts);
         };
 
+        const std::string llmVariant =
+            GetSkyrimNetGateway().ShouldUseDecisions() ? "decisions" : "gamemaster_evaluation";
         RunLlmBatch<VerifyTask>(
             Tr("modal.llm_retry.batch_matchmaking_verify"),
-            "gamemaster_evaluation",
+            llmVariant,
             std::move(tasks),
             std::move(callbacks),
             GetSessionEpoch());
@@ -1613,46 +1171,158 @@ namespace MARAS::App {
 
     void AgencyWorkflowCoordinator::ProceedAfterVerification(std::vector<MatchmakingResult> results,
                                                              const MatchBatchOptions& opts) {
-        const auto snap = State::WorldStore::GetSingleton().Snapshot();
-        const bool requireModal =
-            !opts.skipConfirmationModal &&
-            snap->settings &&
-            snap->settings->matchmakingConfirmResults &&
-            !opts.isManual;
-        if (requireModal) {
-            ShowMatchmakingReviewModal(std::move(results), opts);
+        std::vector<MatchmakingResult> eligible;
+        eligible.reserve(results.size());
+        for (auto& r : results) {
+            if (!r.skipped) {
+                eligible.push_back(std::move(r));
+            }
+        }
+        if (eligible.empty()) {
+            if (opts.isPartnerAgency) {
+                ClearPartnerAgencyRunning();
+            } else {
+                ClearMatchmakingRunning();
+            }
             return;
         }
-        StartMemoryBatchOrApply(std::move(results), opts);
+
+        const auto snap = State::WorldStore::GetSingleton().Snapshot();
+        if (snap->settings &&
+            Domain::Agency::ShouldShowMatchmakingReviewModal(
+                opts.isPartnerAgency, opts.skipConfirmationModal, *snap->settings)) {
+            ShowMatchmakingReviewModal(std::move(eligible), opts);
+            return;
+        }
+        ApplyMatchmakingResults(std::move(eligible), opts);
     }
 
     void AgencyWorkflowCoordinator::ShowMatchmakingReviewModal(std::vector<MatchmakingResult> results,
                                                                const MatchBatchOptions& opts) {
+        const auto snap = State::WorldStore::GetSingleton().Snapshot();
+        const bool revealSecrets = snap->settings ? snap->settings->revealSecretsInUI : false;
+        const bool allowCheating = snap->settings ? snap->settings->matchmakingAllowCheating : true;
+        auto& relUseCases = RelationshipUseCases::GetSingleton();
+
         std::vector<ModalChecklistItem> items;
         items.reserve(results.size());
         bool anyEligible = false;
 
         for (std::size_t i = 0; i < results.size(); ++i) {
             const auto& r = results[i];
+            if (r.skipped) {
+                continue;
+            }
+            anyEligible = true;
+
             ModalChecklistItem item{};
             item.id = std::format("pair_{}", i);
-            item.label = TrFmt("modal.common.pair_subtitle", { { "actorA", r.actorAName }, { "actorB", r.actorBName } });
-            item.subtitle = std::format("{} -> {}", r.action, r.targetStatus);
-            item.description = r.skipped ? r.skipReason : r.memory;
-            item.checked = !r.skipped;
-            item.checkboxDisabled = r.skipped;
-            item.badgeText = r.skipped
-                ? Tr("modal.matchmaking_review.badge_skipped")
-                : (r.isCheating ? Tr("modal.matchmaking_review.badge_cheating") : Tr("modal.matchmaking_review.badge_approved"));
-            item.badgeTone = r.skipped ? "default" : (r.isCheating ? "warning" : "success");
-            if (!r.skipped) {
-                anyEligible = true;
+            const std::string nameA = !r.actorAName.empty() ? r.actorAName : ResolveActorNameForAgency(r.actorAFormID);
+            const std::string nameB = !r.actorBName.empty() ? r.actorBName : ResolveActorNameForAgency(r.actorBFormID);
+            item.label = TrFmt("modal.common.pair_subtitle", { { "actorA", nameA }, { "actorB", nameB } });
+
+            const auto currentSt = relUseCases.GetRelationshipStatus(r.actorAFormID, r.actorBFormID);
+            std::string currentLabel = FormatStatusDisplayLabel(currentSt);
+            if (Foundation::IsActivePartnerStatus(currentSt) && snap->relationships) {
+                const bool isOpen = snap->relationships->IsPairOpen(
+                    Foundation::ActorId{ r.actorAFormID }, Foundation::ActorId{ r.actorBFormID });
+                currentLabel += isOpen ? " (Open)" : " (Exclusive)";
+            }
+            item.subtitle = std::format("{} -> {}", currentLabel, FormatTargetStatusDisplayLabel(r.targetStatus));
+            item.checked = true;
+            item.checkboxDisabled = false;
+
+            // H2 Intrigue Mode + L1 per-item targetStatus dropdown override
+            if (r.action == "new" || r.action == "advance") {
+                if (Domain::Agency::ShouldExposeMatchmakingCheatingBadge(r.isCheating, revealSecrets)) {
+                    item.badgeText = Tr("modal.matchmaking_review.badge_cheating");
+                    item.badgeTone = "warning";
+                } else if (r.action == "advance") {
+                    item.badgeText = "Advance";
+                    item.badgeTone = "success";
+                } else {
+                    item.badgeText = "New";
+                    item.badgeTone = "accent";
+                }
+
+                item.selectKey = "targetStatus";
+                item.selectLabel = "Status";
+                item.selectValue = Foundation::StringUtils::ToLowerStd(r.targetStatus);
+                if (item.selectValue.empty()) {
+                    item.selectValue = "dating";
+                }
+
+                struct StatusOptionSpec {
+                    const char* value;
+                    const char* label;
+                    Foundation::RelationshipStatus statusEnum;
+                };
+                static constexpr StatusOptionSpec kPositiveOptions[] = {
+                    { "dating", "Dating", Foundation::RelationshipStatus::Dating },
+                    { "lover", "Lover", Foundation::RelationshipStatus::Lover },
+                    { "engaged", "Engaged", Foundation::RelationshipStatus::Engaged },
+                    { "married", "Married", Foundation::RelationshipStatus::Married }
+                };
+                for (const auto& spec : kPositiveOptions) {
+                    ModalSelectOption opt{};
+                    opt.value = spec.value;
+                    opt.label = spec.label;
+                    std::string reason;
+                    bool canForm = relUseCases.CanFormRelationship(
+                        r.actorAFormID, r.actorBFormID, spec.statusEnum, &reason);
+                    if (canForm && spec.statusEnum == Foundation::RelationshipStatus::Lover && !allowCheating) {
+                        if (IsPairCheatingTransition(*snap, r.actorAFormID, r.actorBFormID, "lover")) {
+                            canForm = false;
+                            reason = "Cheating is disabled in matchmaking settings";
+                        }
+                    }
+                    if (!canForm && item.selectValue != spec.value) {
+                        opt.disabled = true;
+                        opt.tooltip = std::move(reason);
+                    }
+                    item.selectOptions.push_back(std::move(opt));
+                }
+            } else if (r.action == "breakup") {
+                item.badgeText = "Breakup";
+                item.badgeTone = "danger";
+                item.selectKey = "targetStatus";
+                item.selectLabel = "Status";
+                item.selectValue = Foundation::StringUtils::ToLowerStd(r.targetStatus);
+                if (item.selectValue.empty()) {
+                    item.selectValue = "exdating";
+                }
+                item.selectOptions = {
+                    { "exdating", "Ex-Dating", false, "" },
+                    { "exlover", "Ex-Lover", false, "" },
+                    { "jilted", "Jilted", false, "" },
+                    { "divorced", "Divorced", false, "" }
+                };
+            } else if (r.action == "open") {
+                item.badgeText = "Open";
+                item.badgeTone = "accent";
+            } else if (r.action == "close") {
+                item.badgeText = "Close";
+                item.badgeTone = "default";
+            } else {
+                item.badgeText = Tr("modal.matchmaking_review.badge_approved");
+                item.badgeTone = "success";
+            }
+
+            if (!r.memory.empty()) {
+                item.description = r.memory;
+            } else {
+                item.description = std::format("Proposed '{}' transition to {}.",
+                                               r.action, FormatTargetStatusDisplayLabel(r.targetStatus));
             }
             items.push_back(std::move(item));
         }
 
         if (!anyEligible) {
-            ApplyMatchmakingResults(std::move(results), opts);
+            if (opts.isPartnerAgency) {
+                ClearPartnerAgencyRunning();
+            } else {
+                ClearMatchmakingRunning();
+            }
             return;
         }
 
@@ -1664,7 +1334,7 @@ namespace MARAS::App {
             : Tr("modal.matchmaking_review.subtitle_manual");
         req.message = Tr("modal.matchmaking_review.message");
         req.tone = ModalTone::Ai;
-        req.size = ModalSize::Lg;
+        req.size = items.size() > 4 ? ModalSize::Xl : ModalSize::Lg;
         req.defaultCancelButtonIndex = 1;
         req.controls.push_back(ModalControl::MakeChecklist(
             "selected_matches",
@@ -1691,146 +1361,44 @@ namespace MARAS::App {
                 if (!IsSessionEpochCurrent(expectedEpoch)) {
                     return;
                 }
-                if (resp.aborted || resp.buttonId != "apply") {
-                    for (auto& r : *sharedResults) {
-                        r.skipped = true;
-                        r.skipReason = "Discarded by user";
+                if (resp.aborted || (resp.buttonIndex != 0 && resp.buttonId != "apply")) {
+                    if (opts.isPartnerAgency) {
+                        ClearPartnerAgencyRunning();
+                    } else {
+                        ClearMatchmakingRunning();
                     }
-                    GetUiBridgeGateway().SendMatchmakingResults(*sharedResults, opts.isGlobal);
-                    ClearRunningBatchState();
                     return;
                 }
 
+                const auto snapNow = State::WorldStore::GetSingleton().Snapshot();
+                std::vector<MatchmakingResult> approved;
+                approved.reserve(sharedResults->size());
+
                 for (std::size_t i = 0; i < sharedResults->size(); ++i) {
-                    const std::string itemId = std::format("pair_{}", i);
-                    if (!resp.IsItemChecked("selected_matches", itemId, false)) {
-                        (*sharedResults)[i].skipped = true;
-                        (*sharedResults)[i].skipReason = "Unchecked in review";
-                    }
-                }
-                StartMemoryBatchOrApply(std::move(*sharedResults), opts);
-            });
-    }
-
-    void AgencyWorkflowCoordinator::StartMemoryBatchOrApply(std::vector<MatchmakingResult> results,
-                                                            const MatchBatchOptions& opts) {
-        const auto snap = State::WorldStore::GetSingleton().Snapshot();
-        const bool hasActive = std::any_of(results.begin(), results.end(), [](const MatchmakingResult& r) {
-            return !r.skipped;
-        });
-        if (!hasActive || !snap->settings || !snap->settings->matchmakingGenerateMemories ||
-            !GetSkyrimNetGateway().IsAvailable()) {
-            ApplyMatchmakingResults(std::move(results), opts);
-            return;
-        }
-
-        struct MemoryBatchTask {
-            nlohmann::json contextJson;
-            std::vector<GeneratedMemoryEntry> generatedEntries;
-        };
-
-        auto sharedResults = std::make_shared<std::vector<MatchmakingResult>>(std::move(results));
-
-        LlmBatchCallbacks<MemoryBatchTask> callbacks;
-        callbacks.submitTask = [](MemoryBatchTask& task, auto reportDone) -> bool {
-            return GetSkyrimNetGateway().SendCustomPromptToLLM(
-                "maras_evaluations\\maras_event_memories",
-                "gamemaster_evaluation",
-                task.contextJson.dump(-1, ' ', false, nlohmann::json::error_handler_t::replace),
-                [reportDone = std::move(reportDone)](const char* rawResp, int success) {
-                    if (!success || !rawResp) {
-                        reportDone(false, false, "LLM memory generation request failed", nullptr);
-                        return;
-                    }
-                    const nlohmann::json parsed = JsonService::ParseLLMJson(rawResp);
-                    if (parsed.is_discarded() || !parsed.contains("memories") || !parsed["memories"].is_array()) {
-                        reportDone(false, true, "Invalid JSON memories array", nullptr);
-                        return;
-                    }
-
-                    std::vector<GeneratedMemoryEntry> entries;
-                    for (const auto& m : parsed["memories"]) {
-                        if (!m.is_object()) {
-                            continue;
-                        }
-                        GeneratedMemoryEntry e{};
-                        if (m.contains("actor") && m["actor"].is_string()) {
-                            e.actorName = m["actor"].get<std::string>();
-                        }
-                        if (m.contains("actorFormId") && m["actorFormId"].is_string()) {
-                            if (auto parsedId = Utils::HexStringToFormID(m["actorFormId"].get<std::string>())) {
-                                e.actorFormID = *parsedId;
-                            }
-                        }
-                        if (m.contains("content") && m["content"].is_string()) {
-                            e.content = m["content"].get<std::string>();
-                        }
-                        if (m.contains("location") && m["location"].is_string()) {
-                            e.location = m["location"].get<std::string>();
-                        }
-                        if (m.contains("emotion") && m["emotion"].is_string()) {
-                            e.emotion = m["emotion"].get<std::string>();
-                        }
-                        if (m.contains("importance_score") && m["importance_score"].is_number()) {
-                            e.importanceScore = m["importance_score"].get<float>();
-                        }
-                        if (m.contains("type") && m["type"].is_string()) {
-                            e.type = m["type"].get<std::string>();
-                        }
-                        if (m.contains("tags") && m["tags"].is_array()) {
-                            for (const auto& t : m["tags"]) {
-                                if (t.is_string()) {
-                                    e.tags.push_back(t.get<std::string>());
-                                }
-                            }
-                        }
-                        if (!e.content.empty()) {
-                            entries.push_back(std::move(e));
-                        }
-                    }
-
-                    reportDone(true, false, {}, [entries = std::move(entries)](MemoryBatchTask& t) mutable {
-                        t.generatedEntries = std::move(entries);
-                    });
-                });
-        };
-        callbacks.formatFailureLine = [](const MemoryBatchTask&, const std::string& reason) {
-            return std::format("Memory Generation: {}", reason);
-        };
-        callbacks.onAllResolved = [this, sharedResults, opts](
-                                      const std::shared_ptr<LlmBatchState<MemoryBatchTask>>& state) {
-            if (!state->tasks.empty() && state->tasks.front().success) {
-                const auto& generated = state->tasks.front().payload.generatedEntries;
-                for (auto& match : *sharedResults) {
+                    auto& match = (*sharedResults)[i];
                     if (match.skipped) {
                         continue;
                     }
-                    for (const auto& entry : generated) {
-                        const bool matchesActor =
-                            (entry.actorFormID != 0 &&
-                             (entry.actorFormID == match.actorAFormID || entry.actorFormID == match.actorBFormID)) ||
-                            Foundation::StringUtils::CaseInsensitiveEquals(entry.actorName, match.actorAName) ||
-                            Foundation::StringUtils::CaseInsensitiveEquals(entry.actorName, match.actorBName);
-                        if (matchesActor) {
-                            GeneratedMemoryEntry copy = entry;
-                            copy.relatedActorFormIDs = { match.actorAFormID, match.actorBFormID };
-                            match.dualMemories.push_back(std::move(copy));
+                    const std::string itemId = std::format("pair_{}", i);
+                    if (!resp.IsItemChecked("selected_matches", itemId, false)) {
+                        continue;
+                    }
+                    if (match.action == "new" || match.action == "advance" || match.action == "breakup") {
+                        const std::string chosenStatus = Foundation::StringUtils::ToLowerStd(
+                            resp.GetItemSelectValue("selected_matches", itemId, match.targetStatus));
+                        if (!chosenStatus.empty() && chosenStatus != match.targetStatus) {
+                            MARAS_LOG_INFO("[AgencyWorkflowCoordinator] Review modal overrode {} <-> {}: '{}' -> '{}'",
+                                           match.actorAName, match.actorBName, match.targetStatus, chosenStatus);
+                            match.targetStatus = chosenStatus;
+                            match.isCheating = IsPairCheatingTransition(
+                                *snapNow, match.actorAFormID, match.actorBFormID, match.targetStatus);
                         }
                     }
+                    approved.push_back(std::move(match));
                 }
-            }
-            ApplyMatchmakingResults(std::move(*sharedResults), opts);
-        };
 
-        MemoryBatchTask task{};
-        task.contextJson = BuildMemoryBatchContextJson(*sharedResults, *snap, opts.currentGameDay);
-
-        RunLlmBatch<MemoryBatchTask>(
-            Tr("modal.llm_retry.batch_memory_generation"),
-            "gamemaster_evaluation",
-            { std::move(task) },
-            std::move(callbacks),
-            GetSessionEpoch());
+                ApplyMatchmakingResults(std::move(approved), opts);
+            });
     }
 
     bool AgencyWorkflowCoordinator::ApplyMatch(MatchmakingResult& result, float currentGameDay) {
@@ -1838,39 +1406,112 @@ namespace MARAS::App {
             return false;
         }
         const auto snap = State::WorldStore::GetSingleton().Snapshot();
-        if (!ValidateCandidate(result, *snap, currentGameDay)) {
+        if (!IsNpcEligibleWorldAdult(result.actorAFormID, *snap) ||
+            !IsNpcEligibleWorldAdult(result.actorBFormID, *snap)) {
+            result.skipped = true;
+            result.skipReason = "Actor is deceased or invalid";
             return false;
         }
 
         const RE::FormID idA = result.actorAFormID;
         const RE::FormID idB = result.actorBFormID;
+        const std::string action = NormalizeActionString(result.action, result.targetStatus);
+        result.action = action;
+
+        auto& relUseCases = RelationshipUseCases::GetSingleton();
         bool applied = false;
 
-        ScopedMatchmakingApply applyScope;
-        const bool hasPreGeneratedMemories = !result.dualMemories.empty();
-        std::optional<ScopedMemorySuppression> memorySuppression;
-        if (hasPreGeneratedMemories) {
-            memorySuppression.emplace();
-        }
-
-        if (result.action == "open_close") {
-            const bool targetOpen = Foundation::StringUtils::CaseInsensitiveEquals(result.targetStatus, "open");
-            applied = RelationshipUseCases::GetSingleton().SetPairIsOpen(idA, idB, targetOpen);
-            if (applied && !hasPreGeneratedMemories && GetSkyrimNetGateway().IsAvailable()) {
-                GetSkyrimNetGateway().RecordOpenRelationshipToggle(idA, idB, targetOpen);
+        if (action == "new" || action == "advance") {
+            Foundation::RelationshipStatus targetSt = Foundation::StringToRelationshipStatus(result.targetStatus);
+            if (targetSt == Foundation::RelationshipStatus::Candidate ||
+                targetSt == Foundation::RelationshipStatus::Unknown) {
+                targetSt = Foundation::RelationshipStatus::Dating;
+                result.targetStatus = "dating";
             }
+
+            // M7 + H7: Talking-stage cheating affair for a player's closed active main partner
+            const bool aIsClosedPlayerPartner =
+                relUseCases.IsPlayerActiveMainPartner(idA) && !relUseCases.GetPairIsOpen(idA, kPlayerFormID);
+            const bool bIsClosedPlayerPartner =
+                relUseCases.IsPlayerActiveMainPartner(idB) && !relUseCases.GetPairIsOpen(idB, kPlayerFormID);
+            const bool setTalkingStage =
+                action == "new" &&
+                targetSt == Foundation::RelationshipStatus::Lover &&
+                result.isCheating &&
+                (result.affairStage == Foundation::AffairStage::Talking ||
+                 aIsClosedPlayerPartner || bIsClosedPlayerPartner);
+
+            if (setTalkingStage) {
+                const auto oldSt = relUseCases.GetRelationshipStatus(idA, idB);
+                {
+                    ScopedMemorySuppression suppress;
+                    applied = relUseCases.PromoteToStatusWith(idA, idB, targetSt, /*sendEvent=*/false);
+                }
+                if (applied) {
+                    if (aIsClosedPlayerPartner) {
+                        relUseCases.SetCheatingAffairStage(idA, kPlayerFormID, idB, Foundation::AffairStage::Talking);
+                    }
+                    if (bIsClosedPlayerPartner) {
+                        relUseCases.SetCheatingAffairStage(idB, kPlayerFormID, idA, Foundation::AffairStage::Talking);
+                    }
+                    if (GetSkyrimNetGateway().IsAvailable() && GetSkyrimNetGateway().IsMatchmakingApplyActive()) {
+                        GetSkyrimNetGateway().RecordRelationshipStatusChange(idA, idB, oldSt, targetSt);
+                    }
+                }
+            } else {
+                applied = relUseCases.PromoteToStatusWith(idA, idB, targetSt, /*sendEvent=*/false);
+            }
+        } else if (action == "breakup") {
+            const auto currentStatus = relUseCases.GetRelationshipStatus(idA, idB);
+            const auto [defaultStr, defaultEnum] = Domain::Agency::GetBreakupTargetStatus(currentStatus);
+            auto targetEnum = Foundation::StringToRelationshipStatus(result.targetStatus);
+            std::string targetStr = Foundation::StringUtils::ToLowerStd(result.targetStatus);
+            if (targetEnum != Foundation::RelationshipStatus::Divorced &&
+                targetEnum != Foundation::RelationshipStatus::Jilted &&
+                targetEnum != Foundation::RelationshipStatus::ExDating &&
+                targetEnum != Foundation::RelationshipStatus::ExLover) {
+                targetEnum = defaultEnum;
+                targetStr = std::string(defaultStr);
+            }
+            switch (targetEnum) {
+                case Foundation::RelationshipStatus::Divorced:
+                    applied = relUseCases.PromoteToDivorced(idA, idB, /*sendEvent=*/false);
+                    break;
+                case Foundation::RelationshipStatus::Jilted:
+                    applied = relUseCases.PromoteToJilted(idA, idB, /*sendEvent=*/false);
+                    break;
+                case Foundation::RelationshipStatus::ExDating:
+                    applied = relUseCases.PromoteToExDating(idA, idB, /*sendEvent=*/false);
+                    break;
+                case Foundation::RelationshipStatus::ExLover:
+                    applied = relUseCases.PromoteToExLover(idA, idB, /*sendEvent=*/false);
+                    if (applied &&
+                        result.postBreakupIntent != Foundation::PartnerIntentType::None &&
+                        snap->settings && snap->settings->playerPartnerAgencyEnableForceGreets &&
+                        relUseCases.GetPartnerPendingIntent(idA).type == Foundation::PartnerIntentType::None) {
+                        relUseCases.SetPartnerPendingIntent(idA, result.postBreakupIntent, idB);
+                        MARAS_LOG_INFO("[AgencyWorkflowCoordinator] Queued post-breakup confession intent '{}' for {:08X} regarding ex-lover {:08X}",
+                                       Foundation::PartnerIntentTypeToString(result.postBreakupIntent), idA, idB);
+                    }
+                    break;
+                default:
+                    applied = false;
+                    break;
+            }
+            if (applied) {
+                result.targetStatus = targetStr;
+            }
+        } else if (action == "open") {
+            applied = relUseCases.SetPairIsOpen(idA, idB, true, /*sendEvent=*/false);
+            result.targetStatus = "open";
+        } else if (action == "close") {
+            applied = relUseCases.SetPairIsOpen(idA, idB, false, /*sendEvent=*/false);
+            result.targetStatus = "closed";
         } else {
-            const auto targetStatus = Foundation::StringToRelationshipStatus(result.targetStatus);
-            if (targetStatus == Foundation::RelationshipStatus::Unknown) {
-                result.skipped = true;
-                result.skipReason = "Invalid target status";
-                return false;
-            }
-            applied = RelationshipUseCases::GetSingleton().PromoteToStatus(
-                idA, idB, targetStatus, idA, /*bypassDifficulty=*/true, /*suppressModal=*/true);
+            result.skipped = true;
+            result.skipReason = "Unknown action: " + action;
+            return false;
         }
-
-        memorySuppression.reset();
 
         if (!applied) {
             result.skipped = true;
@@ -1882,10 +1523,6 @@ namespace MARAS::App {
         RecordNpcCooldown(idA, currentGameDay);
         RecordNpcCooldown(idB, currentGameDay);
 
-        if (hasPreGeneratedMemories && GetSkyrimNetGateway().IsAvailable()) {
-            GetSkyrimNetGateway().IngestMemories(result.dualMemories, { idA, idB });
-        }
-
         MARAS_LOG_INFO("[AgencyWorkflowCoordinator] Applied matchmaking: {:08X} ('{}') & {:08X} ('{}') action='{}' status='{}'",
                        idA, result.actorAName, idB, result.actorBName, result.action, result.targetStatus);
         return true;
@@ -1893,20 +1530,52 @@ namespace MARAS::App {
 
     void AgencyWorkflowCoordinator::ApplyMatchmakingResults(std::vector<MatchmakingResult> results,
                                                             const MatchBatchOptions& opts) {
+        // H4: Wrap all ApplyMatch calls in ScopedMatchmakingApply so SkyrimNetMemoryService handles
+        // batching, epistemic isolation, "memory" variant, and programmatic fallback cleanly.
+        std::optional<ScopedMatchmakingApply> applyScope;
+        if (GetSkyrimNetGateway().IsAvailable()) {
+            applyScope.emplace();
+        }
+
         std::size_t appliedCount = 0;
         for (auto& r : results) {
             if (!r.skipped && ApplyMatch(r, opts.currentGameDay)) {
                 ++appliedCount;
             }
         }
+        applyScope.reset();
 
-        GetUiBridgeGateway().SendMatchmakingResults(results, opts.isGlobal);
         if (appliedCount > 0 && GetUiBridgeGateway().IsDashboardOpen()) {
             GetUiBridgeGateway().SendOverviewData();
             GetUiBridgeGateway().SendNPCList();
         }
 
-        ClearRunningBatchState();
+        if (opts.isPartnerAgency) {
+            ClearPartnerAgencyRunning();
+        } else {
+            ClearMatchmakingRunning();
+        }
+    }
+
+    void AgencyWorkflowCoordinator::FinalizePartnerAgencyMatches(std::vector<MatchmakingResult> matches,
+                                                                 float currentGameDay) {
+        if (matches.empty()) {
+            ClearPartnerAgencyRunning();
+            return;
+        }
+        const auto snap = State::WorldStore::GetSingleton().Snapshot();
+        const MatchBatchOptions opts{
+            .currentGameDay = currentGameDay,
+            .isGlobal = true,
+            .isManual = false,
+            .isPartnerAgency = true,
+            .skipConfirmationModal = !(snap->settings && snap->settings->playerPartnerCheatingConfirmResults)
+        };
+        if (!opts.skipConfirmationModal) {
+            ShowMatchmakingReviewModal(std::move(matches), opts);
+            return;
+        }
+        ApplyMatchmakingResults(std::move(matches), opts);
     }
 
     // =========================================================================
@@ -1922,9 +1591,6 @@ namespace MARAS::App {
         if (!settings.playerPartnerCheatingAgencyEnabled && !settings.playerPartnerOpenRelAgencyEnabled) {
             return;
         }
-        if (IsPartnerAgencyRunning()) {
-            return;
-        }
 
         const float lastDay = GetLastPlayerPartnerCheatingDay();
         const float scanInterval = settings.GetPartnerAgencyScanIntervalDays();
@@ -1932,8 +1598,13 @@ namespace MARAS::App {
             return;
         }
 
-        runningPartnerAgency_.store(true, std::memory_order_release);
+        // L2: Atomic exchange prevents race between concurrent triggers
+        if (runningPartnerAgency_.exchange(true, std::memory_order_acq_rel)) {
+            return;
+        }
 
+        auto* playerActor = RE::PlayerCharacter::GetSingleton();
+        auto& spatialIdx = SpatialWorldIndex::GetSingleton();
         const auto spatialSnap = State::SpatialSnapshotStore::GetSingleton().Snapshot();
         std::vector<Domain::Agency::PartnerAgencyInput> inputs;
 
@@ -1941,16 +1612,33 @@ namespace MARAS::App {
             if (!Foundation::IsMainTierStatus(status)) {
                 continue;
             }
-            if (!IsNpcEligibleBasicEngineCheck(partnerId.raw(), *snap)) {
+            if (!IsNpcEligibleWorldAdult(partnerId.raw(), *snap)) {
                 continue;
             }
+
+            // M4: Hard Immunity 3 — follower, same cell, or <= 3000.0f distance
             bool nearOrFollower = false;
-            if (spatialSnap) {
+            if (RE::Actor* livePartner = spatialIdx.GetActorFromFormId(partnerId.raw())) {
+                if (livePartner->IsDead() || livePartner->IsDeleted() || livePartner->IsDisabled()) {
+                    continue;
+                }
+                if (Utils::IsPlayerFollower(livePartner)) {
+                    nearOrFollower = true;
+                } else if (playerActor && livePartner->Is3DLoaded() &&
+                           (livePartner->GetParentCell() == playerActor->GetParentCell() ||
+                            livePartner->GetPosition().GetDistance(playerActor->GetPosition()) <= 3000.0f)) {
+                    nearOrFollower = true;
+                }
+            } else if (spatialSnap) {
                 if (const auto* sample = spatialSnap->Find(partnerId.AsRefId())) {
-                    nearOrFollower = sample->IsPlayerTeammate() ||
-                                     spatialSnap->IsWithinRadius(Foundation::RefId::Player(), partnerId.AsRefId(), 1500.0f);
+                    const auto* playerSample = spatialSnap->Find(Foundation::RefId::Player());
+                    const bool sameCell = playerSample && !playerSample->parentCellId.IsNull() &&
+                                          sample->parentCellId == playerSample->parentCellId;
+                    nearOrFollower = sample->IsPlayerTeammate() || sameCell ||
+                                     spatialSnap->IsWithinRadius(Foundation::RefId::Player(), partnerId.AsRefId(), 3000.0f);
                 }
             }
+
             bool pregnantWithPlayer = false;
             if (snap->lineage) {
                 for (const auto cid : snap->lineage->GetUnbornOfMother(partnerId)) {
@@ -1965,8 +1653,8 @@ namespace MARAS::App {
 
             Domain::Agency::PartnerAgencyInput input{};
             input.partnerId = partnerId;
-            input.partnerName = ResolveActorName(partnerId.raw());
-            input.partnerSex = ResolveActorSexEnum(partnerId.raw());
+            input.partnerName = ResolveActorNameForAgency(partnerId.raw());
+            input.partnerSex = ResolveActorSexForAgency(partnerId.raw());
             input.isFollowerOrNearPlayer = nearOrFollower;
             input.isPregnantWithPlayerChild = pregnantWithPlayer;
             inputs.push_back(std::move(input));
@@ -1974,201 +1662,311 @@ namespace MARAS::App {
 
         if (inputs.empty()) {
             SetLastPlayerPartnerCheatingDay(currentGameDay);
-            runningPartnerAgency_.store(false, std::memory_order_release);
+            ClearPartnerAgencyRunning();
             return;
         }
 
         Foundation::DeterministicRng rng(static_cast<std::uint32_t>(std::random_device{}()));
         const auto plans = Domain::Agency::EvaluatePartnerAgencyActions(*snap, inputs, currentGameDay, rng);
 
-        std::vector<PartnerAgencyBatchItem> llmTasks;
+        // C6: Clear any expired pending intents (including ConfessPhysical or SuggestOpen that expired without firing)
+        {
+            const float intentTTL = settings.GetPartnerIntentTTLDays();
+            std::vector<Foundation::ActorId> expiredToClear;
+            for (const auto& input : inputs) {
+                const auto pending = snap->relationships->GetPendingIntent(input.partnerId);
+                if (pending.type != Foundation::PartnerIntentType::None &&
+                    pending.createdGameDay >= 0.0f &&
+                    (currentGameDay - pending.createdGameDay) >= intentTTL) {
+                    expiredToClear.push_back(input.partnerId);
+                }
+            }
+            if (!expiredToClear.empty()) {
+                State::WorldStore::GetSingleton().Modify([&](State::WorldState& ws) {
+                    auto& rels = ws.relationships.Write();
+                    for (const auto pid : expiredToClear) {
+                        rels.ClearPendingIntent(pid);
+                    }
+                });
+            }
+        }
+
+        const auto freshSnap = State::WorldStore::GetSingleton().Snapshot();
         const bool useLlm = GetSkyrimNetGateway().IsAvailable() && settings.playerPartnerCheatingUseLLM;
+        auto& relUseCases = RelationshipUseCases::GetSingleton();
+
+        std::vector<PartnerAgencyBatchItem> llmTasks;
+        std::vector<MatchmakingResult> directMatches;
+        std::unordered_set<RE::FormID> diceUsedCandidates;
+        std::size_t newBondSearchCount = 0;
+
+        auto makeContextInput = [&](const Domain::Agency::PartnerAgencyActionPlan& plan,
+                                    const std::string& evalMode,
+                                    bool canConfess,
+                                    std::string driversSummary) {
+            PartnerAgencyContextInput ci{};
+            ci.partnerID = plan.partnerId.raw();
+            ci.partnerName = ResolveActorNameForAgency(plan.partnerId.raw());
+            ci.statusWithPlayer = freshSnap->relationships->GetStatus(Foundation::ActorId::Player(), plan.partnerId);
+            ci.affection = freshSnap->affection ? freshSnap->affection->GetPermanent(plan.partnerId, 50) : 50;
+            ci.daysSinceInteraction = std::max(0.0f, relUseCases.GetDaysSinceLastAffection(plan.partnerId.raw()));
+            ci.hierarchyRank = (ci.statusWithPlayer == Foundation::RelationshipStatus::Married && freshSnap->hierarchy)
+                                   ? freshSnap->hierarchy->GetRank(plan.partnerId)
+                                   : -1;
+            ci.sharedChildrenCount = CountSharedChildrenWithPlayer(*freshSnap, plan.partnerId);
+            ci.isOpenRelationshipLover =
+                freshSnap->relationships->IsPairOpen(Foundation::ActorId::Player(), plan.partnerId);
+            ci.finalChance = plan.rolledChance;
+            ci.driversSummary = std::move(driversSummary);
+            ci.locCtx = ResolveActorLocationContext(plan.partnerId.raw(), *freshSnap);
+            ci.evalMode = evalMode;
+            ci.sideLoverID = plan.relatedLoverId.raw();
+            ci.sideLoverName = plan.relatedLoverId.IsNull() ? std::string() : ResolveActorNameForAgency(plan.relatedLoverId.raw());
+            ci.canConfess = canConfess;
+            ci.sideAffairStage = Foundation::AffairStage::Physical;
+            if (!plan.relatedLoverId.IsNull()) {
+                if (const auto* aff = freshSnap->affairs->FindTriple(
+                        plan.partnerId, Foundation::ActorId::Player(), plan.relatedLoverId)) {
+                    ci.sideAffairStage = aff->affairStage;
+                }
+                const float startDay = GetLatestNonBreakupStartDaySafe(*freshSnap, plan.partnerId, plan.relatedLoverId);
+                if (startDay >= 0.0f) {
+                    ci.sideLoverAgeDays = std::max(0.0f, currentGameDay - startDay);
+                }
+            }
+            return ci;
+        };
 
         for (const auto& plan : plans) {
             using Domain::Agency::PartnerAgencyActionType;
 
-            if (plan.type == PartnerAgencyActionType::EscalateTalkingToPhysical) {
-                State::WorldStore::GetSingleton().Modify([&](State::WorldState& ws) {
-                    ws.affairs.Write().SetStage(
-                        plan.partnerId,
-                        Foundation::ActorId::Player(),
-                        plan.relatedLoverId,
-                        Foundation::AffairStage::Physical,
-                        currentGameDay);
-                });
-                continue;
-            }
-            if (plan.type == PartnerAgencyActionType::ExpiredIntentSuggestClosePenalty) {
-                PartnerAgencyBatchItem item{};
-                item.plan = plan;
-                ApplySinglePartnerAgencyOutcome(item, currentGameDay);
-                continue;
-            }
-            if (plan.type == PartnerAgencyActionType::ExpiredIntentConfessEscalatePhysical) {
-                State::WorldStore::GetSingleton().Modify([&](State::WorldState& ws) {
-                    ws.affairs.Write().SetStage(
-                        plan.partnerId,
-                        Foundation::ActorId::Player(),
-                        plan.relatedLoverId,
-                        Foundation::AffairStage::Physical,
-                        currentGameDay);
-                    ws.relationships.Write().ClearPendingIntent(plan.partnerId);
-                });
-                PartnerAgencyBatchItem item{};
-                item.plan = plan;
-                ApplySinglePartnerAgencyOutcome(item, currentGameDay);
+            if (plan.type == PartnerAgencyActionType::EscalateTalkingToPhysical ||
+                plan.type == PartnerAgencyActionType::ExpiredIntentConfessEscalatePhysical) {
+                if (!plan.relatedLoverId.IsNull()) {
+                    State::WorldStore::GetSingleton().Modify([&](State::WorldState& ws) {
+                        ws.affairs.Write().SetStage(
+                            plan.partnerId,
+                            Foundation::ActorId::Player(),
+                            plan.relatedLoverId,
+                            Foundation::AffairStage::Physical,
+                            currentGameDay);
+                        ws.relationships.Write().ClearPendingIntent(plan.partnerId);
+                    });
+                }
                 continue;
             }
 
-            PartnerAgencyBatchItem item{};
-            item.plan = plan;
-            item.partnerName = ResolveActorName(plan.partnerId.raw());
-            item.sideLoverName = ResolveActorName(plan.relatedLoverId.raw());
-            item.affairStageStr = "talking";
-            if (!plan.relatedLoverId.IsNull()) {
-                if (const auto* affair = snap->affairs->FindTriple(
-                        plan.partnerId, Foundation::ActorId::Player(), plan.relatedLoverId)) {
-                    item.affairStageStr = std::string(Foundation::AffairStageToString(affair->affairStage));
-                }
+            if (plan.type == PartnerAgencyActionType::ExpiredIntentSuggestClosePenalty) {
+                const int curAff = freshSnap->affection ? freshSnap->affection->GetPermanent(plan.partnerId, 50) : 50;
+                relUseCases.SetPermanentAffection(
+                    plan.partnerId.raw(), std::clamp(curAff + plan.permanentAffectionDelta, 0, 100), true);
+                continue;
             }
+
+            const bool canSetPendingIntent =
+                settings.playerPartnerAgencyEnableForceGreets &&
+                relUseCases.GetPartnerPendingIntent(plan.partnerId.raw()).type == Foundation::PartnerIntentType::None;
 
             switch (plan.type) {
-                case PartnerAgencyActionType::BreakupClosedAffairLover:
-                    item.evalMode = "breakup_affair";
-                    item.canConfess = true;
+                case PartnerAgencyActionType::BreakupClosedAffairLover: {
+                    auto ci = makeContextInput(plan, "breakup_affair", canSetPendingIntent,
+                                               "guilt, renewed attention from the player, or affair fatigue");
+                    if (!useLlm) {
+                        MatchmakingResult br{};
+                        br.actorAFormID = ci.partnerID;
+                        br.actorBFormID = ci.sideLoverID;
+                        br.actorAName = ci.partnerName;
+                        br.actorBName = ci.sideLoverName;
+                        br.action = "breakup";
+                        br.targetStatus = "exlover";
+                        br.isCheating = false;
+                        if (plan.triggerConfessIntent && canSetPendingIntent) {
+                            br.postBreakupIntent = (ci.sideAffairStage == Foundation::AffairStage::Talking)
+                                                       ? Foundation::PartnerIntentType::ConfessTalking
+                                                       : Foundation::PartnerIntentType::ConfessPhysical;
+                        }
+                        br.memory = std::format("{} ended their secret {} affair with {} out of guilt and renewed focus on their relationship with the player.",
+                                                ci.partnerName, Foundation::AffairStageToString(ci.sideAffairStage), ci.sideLoverName);
+                        if (ValidateCandidate(br, *freshSnap, currentGameDay, /*checkCooldown=*/false)) {
+                            directMatches.push_back(std::move(br));
+                        }
+                    } else {
+                        PartnerAgencyBatchItem task{};
+                        task.plan = plan;
+                        task.contextJson = BuildPartnerAgencyContextJson(*freshSnap, ci, currentGameDay);
+                        task.ctxInput = std::move(ci);
+                        llmTasks.push_back(std::move(task));
+                    }
                     break;
-                case PartnerAgencyActionType::BreakupOpenLover:
-                    item.evalMode = "breakup_open_lover";
+                }
+                case PartnerAgencyActionType::ConfessAffairIntent: {
+                    // M2: Route standalone ConfessAffairIntent through "breakup_affair" LLM when useLlm is true
+                    auto ci = makeContextInput(plan, "breakup_affair", true,
+                                               "remorse and high affection after recent time with the player");
+                    if (!useLlm) {
+                        if (canSetPendingIntent) {
+                            const auto confType = (ci.sideAffairStage == Foundation::AffairStage::Talking)
+                                                      ? Foundation::PartnerIntentType::ConfessTalking
+                                                      : Foundation::PartnerIntentType::ConfessPhysical;
+                            relUseCases.SetPartnerPendingIntent(plan.partnerId.raw(), confType, plan.relatedLoverId.raw());
+                        }
+                    } else {
+                        PartnerAgencyBatchItem task{};
+                        task.plan = plan;
+                        task.contextJson = BuildPartnerAgencyContextJson(*freshSnap, ci, currentGameDay);
+                        task.ctxInput = std::move(ci);
+                        llmTasks.push_back(std::move(task));
+                    }
                     break;
+                }
+                case PartnerAgencyActionType::BreakupOpenLover: {
+                    auto ci = makeContextInput(plan, "breakup_open_lover", false,
+                                               "natural cooling of casual open-relationship fling");
+                    if (!useLlm) {
+                        MatchmakingResult br{};
+                        br.actorAFormID = ci.partnerID;
+                        br.actorBFormID = ci.sideLoverID;
+                        br.actorAName = ci.partnerName;
+                        br.actorBName = ci.sideLoverName;
+                        br.action = "breakup";
+                        br.targetStatus = "exlover";
+                        br.isCheating = false;
+                        br.memory = std::format("{} amicably ended their casual open-relationship fling with {} after {:.0f} days.",
+                                                ci.partnerName, ci.sideLoverName, ci.sideLoverAgeDays);
+                        if (ValidateCandidate(br, *freshSnap, currentGameDay, /*checkCooldown=*/false)) {
+                            directMatches.push_back(std::move(br));
+                        }
+                    } else {
+                        PartnerAgencyBatchItem task{};
+                        task.plan = plan;
+                        task.contextJson = BuildPartnerAgencyContextJson(*freshSnap, ci, currentGameDay);
+                        task.ctxInput = std::move(ci);
+                        llmTasks.push_back(std::move(task));
+                    }
+                    break;
+                }
                 case PartnerAgencyActionType::SuggestOpenIntent:
-                    item.evalMode = "suggest_open";
+                case PartnerAgencyActionType::SuggestCloseIntent: {
+                    const bool isSuggestOpen = (plan.type == PartnerAgencyActionType::SuggestOpenIntent);
+                    auto ci = makeContextInput(plan,
+                                               isSuggestOpen ? "suggest_open" : "suggest_close",
+                                               false,
+                                               isSuggestOpen ? "desire for open relationship freedom or polygamy parity"
+                                                             : "desire for exclusive commitment with the player");
+                    if (!useLlm) {
+                        if (canSetPendingIntent) {
+                            relUseCases.SetPartnerPendingIntent(
+                                plan.partnerId.raw(),
+                                isSuggestOpen ? Foundation::PartnerIntentType::SuggestOpen
+                                              : Foundation::PartnerIntentType::SuggestClose,
+                                0);
+                        }
+                    } else {
+                        PartnerAgencyBatchItem task{};
+                        task.plan = plan;
+                        task.contextJson = BuildPartnerAgencyContextJson(*freshSnap, ci, currentGameDay);
+                        task.ctxInput = std::move(ci);
+                        llmTasks.push_back(std::move(task));
+                    }
                     break;
-                case PartnerAgencyActionType::SuggestCloseIntent:
-                    item.evalMode = "suggest_close";
-                    break;
-                case PartnerAgencyActionType::ConfessAffairIntent:
-                    ApplySinglePartnerAgencyOutcome(item, currentGameDay);
-                    continue;
+                }
                 case PartnerAgencyActionType::SeekOpenLover:
                 case PartnerAgencyActionType::SeekSecretAffair:
-                case PartnerAgencyActionType::ExpiredIntentForceSuggestOpenAffair:
-                    item.shortlistedIds = CollectShortlistedParamours(*snap, plan.partnerId, 6);
-                    if (item.shortlistedIds.empty()) {
-                        continue;
+                case PartnerAgencyActionType::ExpiredIntentForceSuggestOpenAffair: {
+                    if (newBondSearchCount >= 3) {
+                        break;
+                    }
+                    const bool isOpenPartner = (plan.type == PartnerAgencyActionType::SeekOpenLover);
+                    const std::string driverText =
+                        (plan.type == PartnerAgencyActionType::ExpiredIntentForceSuggestOpenAffair)
+                            ? "unaddressed desire to open the relationship after being ignored by the player"
+                            : (isOpenPartner ? "open relationship freedom and companionship"
+                                             : "emotional distance from player");
+                    auto ci = makeContextInput(plan, "candidate_select", false, driverText);
+                    ci.isOpenRelationshipLover = isOpenPartner;
+                    ci.shortlist = CollectShortlistedParamours(
+                        *freshSnap, plan.partnerId, isOpenPartner, ci.locCtx, currentGameDay, rng);
+                    if (ci.shortlist.empty()) {
+                        break;
+                    }
+                    ++newBondSearchCount;
+
+                    if (!useLlm) {
+                        // Weighted dice-roll selection from scored shortlist with candidate dedup
+                        std::vector<const ScoredAffairCandidate*> avail;
+                        int totalWeight = 0;
+                        for (const auto& sc : ci.shortlist) {
+                            if (!diceUsedCandidates.contains(sc.formID)) {
+                                avail.push_back(&sc);
+                                totalWeight += std::max(1, sc.score);
+                            }
+                        }
+                        if (avail.empty() || totalWeight <= 0) {
+                            break;
+                        }
+                        const int wRoll = rng.NextInt(0, totalWeight - 1);
+                        int accum = 0;
+                        const ScoredAffairCandidate* chosen = avail.front();
+                        for (const auto* sc : avail) {
+                            accum += std::max(1, sc->score);
+                            if (wRoll < accum) {
+                                chosen = sc;
+                                break;
+                            }
+                        }
+                        MatchmakingResult r{};
+                        r.actorAFormID = ci.partnerID;
+                        r.actorBFormID = chosen->formID;
+                        r.actorAName = ci.partnerName;
+                        r.actorBName = chosen->name;
+                        r.action = "new";
+                        r.targetStatus = "lover";
+                        r.isCheating = !isOpenPartner;
+                        r.affairStage = isOpenPartner ? Foundation::AffairStage::Physical : Foundation::AffairStage::Talking;
+                        r.memory = isOpenPartner
+                                       ? std::format("{} formed an open-relationship lover bond with {} ({}) driven by {}.",
+                                                     ci.partnerName, chosen->name, chosen->connectionTag, ci.driversSummary)
+                                       : std::format("{} began a secret talking-stage affair with {} ({}) driven by {}.",
+                                                     ci.partnerName, chosen->name, chosen->connectionTag, ci.driversSummary);
+                        if (ValidateCandidate(r, *freshSnap, currentGameDay, /*checkCooldown=*/false)) {
+                            diceUsedCandidates.insert(chosen->formID);
+                            directMatches.push_back(std::move(r));
+                        }
+                    } else {
+                        PartnerAgencyBatchItem task{};
+                        task.plan = plan;
+                        task.contextJson = BuildPartnerAgencyContextJson(*freshSnap, ci, currentGameDay);
+                        task.ctxInput = std::move(ci);
+                        llmTasks.push_back(std::move(task));
                     }
                     break;
+                }
                 default:
-                    continue;
+                    break;
             }
-
-            if (!useLlm) {
-                item.result.willBreakup = true;
-                item.result.willConfess = plan.triggerConfessIntent;
-                item.result.willSuggest = true;
-                item.result.willCheat = true;
-                if (!item.shortlistedIds.empty()) {
-                    const auto idx = static_cast<std::size_t>(
-                        rng.NextInt(0, static_cast<std::int32_t>(item.shortlistedIds.size() - 1)));
-                    item.result.chosenCandidateName = ResolveActorName(item.shortlistedIds[idx].raw());
-                }
-                ApplySinglePartnerAgencyOutcome(item, currentGameDay);
-                continue;
-            }
-
-            const bool isOpen = snap->relationships->IsPairOpen(Foundation::ActorId::Player(), plan.partnerId);
-            const auto relStatus = snap->relationships->GetStatus(Foundation::ActorId::Player(), plan.partnerId);
-
-            auto& skyrimNet = GetSkyrimNetGateway();
-            const std::uint64_t partnerUuid = skyrimNet.GetActorUUID(plan.partnerId.raw());
-            const std::uint64_t sideLoverUuid =
-                plan.relatedLoverId.IsNull() ? 0 : skyrimNet.GetActorUUID(plan.relatedLoverId.raw());
-            const std::uint64_t playerUuid = skyrimNet.GetActorUUID(kPlayerFormID);
-
-            nlohmann::json ctx;
-            ctx["partnerName"] = item.partnerName;
-            ctx["partnerUUID"] = partnerUuid;
-            ctx["partnerRace"] = ResolveActorRaceName(plan.partnerId.raw());
-            ctx["partnerSex"] = SexToDisplayString(ResolveActorSexEnum(plan.partnerId.raw()));
-            ctx["partnerRelationships"] = FormatRelationshipsSummary(*snap, plan.partnerId);
-            ctx["playerName"] = GetPlayerNameSafe();
-            ctx["playerRelationshipStatus"] = std::string(Foundation::RelationshipStatusToString(relStatus));
-            ctx["isOpenRelationship"] = isOpen;
-            ctx["evalMode"] = item.evalMode;
-            ctx["affairStage"] = item.affairStageStr;
-            ctx["sideLoverName"] = item.sideLoverName;
-            ctx["sideLoverUUID"] = sideLoverUuid;
-            ctx["sideLoverRace"] = plan.relatedLoverId.IsNull() ? std::string() : ResolveActorRaceName(plan.relatedLoverId.raw());
-            ctx["sideLoverSex"] = plan.relatedLoverId.IsNull()
-                                      ? std::string()
-                                      : SexToDisplayString(ResolveActorSexEnum(plan.relatedLoverId.raw()));
-            ctx["partnerCurrentLocation"] = "Home";
-            ctx["playerPresenceHint"] = "Away from home";
-            ctx["sharedChildrenCount"] = 0;
-            ctx["playerCheatedOnPartner"] = snap->affairs->HasCheatedOn(Foundation::ActorId::Player(), plan.partnerId);
-            ctx["playerAffairPartnerName"] = "";
-            ctx["sideLoverLocation"] = "Skyrim";
-            ctx["sideLoverDurationHint"] = "has been ongoing";
-            ctx["canConfess"] = item.canConfess;
-
-            nlohmann::json recentParticipants = nlohmann::json::array();
-            auto appendUniqueUuid = [&](std::uint64_t uuid) {
-                if (uuid == 0) {
-                    return;
-                }
-                for (const auto& existing : recentParticipants) {
-                    if (existing.is_number_unsigned() && existing.get<std::uint64_t>() == uuid) {
-                        return;
-                    }
-                }
-                recentParticipants.push_back(uuid);
-            };
-            appendUniqueUuid(partnerUuid);
-            appendUniqueUuid(playerUuid);
-            if (!plan.relatedLoverId.IsNull()) {
-                appendUniqueUuid(sideLoverUuid);
-            }
-
-            nlohmann::json candArr = nlohmann::json::array();
-            std::string candText;
-            for (const auto candId : item.shortlistedIds) {
-                const std::string cName = ResolveActorName(candId.raw());
-                const std::uint64_t cUuid = skyrimNet.GetActorUUID(candId.raw());
-                if (plan.relatedLoverId.IsNull()) {
-                    appendUniqueUuid(cUuid);
-                }
-                nlohmann::json ce;
-                ce["name"] = cName;
-                ce["formId"] = FormatFormId8Hex(candId.raw());
-                ce["uuid"] = cUuid;
-                ce["connectionTag"] = "Local acquaintance";
-                ce["eligibility"] = "Available";
-                candArr.push_back(std::move(ce));
-                candText += std::format("- {}\n", cName);
-            }
-            ctx["recent_events_participants"] = std::move(recentParticipants);
-            ctx["candidatesCount"] = candArr.size();
-            ctx["candidatesList"] = candText;
-            ctx["candidates"] = std::move(candArr);
-
-            item.contextJson = std::move(ctx);
-            llmTasks.push_back(std::move(item));
         }
 
         if (llmTasks.empty()) {
             SetLastPlayerPartnerCheatingDay(currentGameDay);
-            runningPartnerAgency_.store(false, std::memory_order_release);
+            FinalizePartnerAgencyMatches(std::move(directMatches), currentGameDay);
             return;
         }
 
+        auto sharedDirectMatches = std::make_shared<std::vector<MatchmakingResult>>(std::move(directMatches));
+
         LlmBatchCallbacks<PartnerAgencyBatchItem> callbacks;
         callbacks.submitTask = [](PartnerAgencyBatchItem& task, auto reportDone) -> bool {
+            const std::string affairStageStr =
+                task.contextJson.contains("affairStage") && task.contextJson["affairStage"].is_string()
+                    ? task.contextJson["affairStage"].get<std::string>()
+                    : std::string("talking");
             return GetSkyrimNetGateway().EvaluatePartnerAgency(
                 task.contextJson.dump(-1, ' ', false, nlohmann::json::error_handler_t::replace),
-                task.evalMode,
-                task.canConfess,
-                task.partnerName,
-                task.sideLoverName,
-                task.affairStageStr,
+                task.ctxInput.evalMode,
+                task.ctxInput.canConfess,
+                task.ctxInput.partnerName,
+                task.ctxInput.sideLoverName,
+                affairStageStr,
                 [reportDone = std::move(reportDone)](const PartnerAgencyEvalResult& eval) {
                     if (!eval.success) {
                         const bool isInvalidJson = (eval.failureType == LLMFailureType::InvalidJson);
@@ -2182,22 +1980,178 @@ namespace MARAS::App {
                 });
         };
         callbacks.formatFailureLine = [](const PartnerAgencyBatchItem& t, const std::string& reason) {
-            return std::format("{} ({}): {}", t.partnerName, t.evalMode.empty() ? "agency" : t.evalMode, reason);
+            return std::format("{} ({}): {}",
+                               t.ctxInput.partnerName,
+                               t.ctxInput.evalMode.empty() ? "agency" : t.ctxInput.evalMode,
+                               reason);
         };
-        callbacks.onAllResolved = [this, currentGameDay](
+        callbacks.onAllResolved = [this, currentGameDay, sharedDirectMatches](
                                       const std::shared_ptr<LlmBatchState<PartnerAgencyBatchItem>>& state) {
             SetLastPlayerPartnerCheatingDay(currentGameDay);
+            const auto snapNow = State::WorldStore::GetSingleton().Snapshot();
+            auto& relMgr = RelationshipUseCases::GetSingleton();
+            const bool forceGreetsEnabled =
+                snapNow->settings && snapNow->settings->playerPartnerAgencyEnableForceGreets;
+
+            std::unordered_set<RE::FormID> usedCandidates;
+            std::vector<MatchmakingResult> matches = std::move(*sharedDirectMatches);
+
             for (const auto& item : state->tasks) {
-                if (item.success) {
-                    ApplySinglePartnerAgencyOutcome(item.payload, currentGameDay);
+                if (!item.success) {
+                    continue;
+                }
+                const auto& ci = item.payload.ctxInput;
+                const auto& eval = item.payload.result;
+                const auto& mode = ci.evalMode;
+
+                if (!IsNpcEligibleWorldAdult(ci.partnerID, *snapNow)) {
+                    continue;
+                }
+                if ((mode == "breakup_affair" || mode == "breakup_open_lover") &&
+                    ci.sideLoverID != 0 && !IsNpcEligibleWorldAdult(ci.sideLoverID, *snapNow)) {
+                    continue;
+                }
+
+                if (mode == "suggest_open" || mode == "suggest_close") {
+                    if (eval.willSuggest && forceGreetsEnabled &&
+                        relMgr.GetPartnerPendingIntent(ci.partnerID).type == Foundation::PartnerIntentType::None) {
+                        const auto sType = (mode == "suggest_open")
+                                               ? Foundation::PartnerIntentType::SuggestOpen
+                                               : Foundation::PartnerIntentType::SuggestClose;
+                        relMgr.SetPartnerPendingIntent(ci.partnerID, sType, 0);
+                        MARAS_LOG_INFO("[AgencyWorkflowCoordinator] Partner agency queued intent '{}' for {:08X}",
+                                       Foundation::PartnerIntentTypeToString(sType), ci.partnerID);
+                    }
+                    continue;
+                }
+
+                if (mode == "breakup_affair") {
+                    const auto confType = (ci.sideAffairStage == Foundation::AffairStage::Talking)
+                                              ? Foundation::PartnerIntentType::ConfessTalking
+                                              : Foundation::PartnerIntentType::ConfessPhysical;
+                    if (eval.willBreakup && ci.sideLoverID != 0) {
+                        MatchmakingResult br{};
+                        br.actorAFormID = ci.partnerID;
+                        br.actorBFormID = ci.sideLoverID;
+                        br.actorAName = ci.partnerName;
+                        br.actorBName = ci.sideLoverName;
+                        br.action = "breakup";
+                        br.targetStatus = "exlover";
+                        br.isCheating = false;
+                        br.memory = !eval.reasoning.empty()
+                                        ? eval.reasoning
+                                        : std::format("{} ended their secret {} affair with {}.",
+                                                      ci.partnerName,
+                                                      Foundation::AffairStageToString(ci.sideAffairStage),
+                                                      ci.sideLoverName);
+                        if (eval.willConfess && ci.canConfess) {
+                            br.postBreakupIntent = confType;
+                        }
+                        if (ValidateCandidate(br, *snapNow, currentGameDay, /*checkCooldown=*/false)) {
+                            matches.push_back(std::move(br));
+                        }
+                    } else if (eval.willConfess && ci.canConfess && forceGreetsEnabled &&
+                               relMgr.GetPartnerPendingIntent(ci.partnerID).type == Foundation::PartnerIntentType::None) {
+                        // M2: Do NOT drop standalone willConfess when !willBreakup!
+                        relMgr.SetPartnerPendingIntent(ci.partnerID, confType, ci.sideLoverID);
+                        MARAS_LOG_INFO("[AgencyWorkflowCoordinator] Partner agency queued guilt confession '{}' for {:08X} (lover={:08X})",
+                                       Foundation::PartnerIntentTypeToString(confType), ci.partnerID, ci.sideLoverID);
+                    }
+                    continue;
+                }
+
+                if (mode == "breakup_open_lover") {
+                    if (eval.willBreakup && ci.sideLoverID != 0) {
+                        MatchmakingResult br{};
+                        br.actorAFormID = ci.partnerID;
+                        br.actorBFormID = ci.sideLoverID;
+                        br.actorAName = ci.partnerName;
+                        br.actorBName = ci.sideLoverName;
+                        br.action = "breakup";
+                        br.targetStatus = "exlover";
+                        br.isCheating = false;
+                        br.memory = !eval.reasoning.empty()
+                                        ? eval.reasoning
+                                        : std::format("{} amicably ended their open-relationship fling with {}.",
+                                                      ci.partnerName, ci.sideLoverName);
+                        if (ValidateCandidate(br, *snapNow, currentGameDay, /*checkCooldown=*/false)) {
+                            matches.push_back(std::move(br));
+                        }
+                    }
+                    continue;
+                }
+
+                // candidate_select: SeekOpenLover / SeekSecretAffair / ExpiredIntentForceSuggestOpenAffair
+                if (!eval.willCheat) {
+                    continue;
+                }
+
+                // C2: Resolve chosenCandidateIndex FIRST before falling back to chosenCandidateName!
+                std::vector<Domain::Agency::ShortlistCandidateRef> shortlistRefs;
+                shortlistRefs.reserve(ci.shortlist.size());
+                for (const auto& c : ci.shortlist) {
+                    shortlistRefs.push_back({ Foundation::ActorId{ c.formID }, c.name, c.connectionTag });
+                }
+                std::unordered_set<Foundation::ActorId> usedActorIds;
+                usedActorIds.reserve(usedCandidates.size());
+                for (const RE::FormID uid : usedCandidates) {
+                    usedActorIds.insert(Foundation::ActorId{ uid });
+                }
+
+                const auto choice = Domain::Agency::ResolvePartnerAgencyCandidate(
+                    eval.chosenCandidateIndex, eval.chosenCandidateName, shortlistRefs, usedActorIds);
+                RE::FormID chosenId = choice.actorId.raw();
+                std::string chosenName = choice.name;
+                std::string reasoning = eval.reasoning;
+                if (choice.matchedByIndex && chosenId != 0) {
+                    reasoning = ci.isOpenRelationshipLover
+                                    ? std::format("{} formed an open-relationship lover bond with {} ({}) driven by {} ({}).",
+                                                  ci.partnerName, choice.name, choice.connectionTag, ci.driversSummary, eval.reasoning)
+                                    : std::format("{} began a secret talking-stage affair with {} ({}) driven by {} ({}).",
+                                                  ci.partnerName, choice.name, choice.connectionTag, ci.driversSummary, eval.reasoning);
+                } else if (choice.needsExternalNameLookup) {
+                    const std::string_view trimmed = Foundation::StringUtils::TrimView(eval.chosenCandidateName);
+                    if (const auto entry = SpatialWorldIndex::GetSingleton().FindByName(trimmed, NPCFilter::AdultOnly)) {
+                        chosenId = entry->refFormID != 0 ? entry->refFormID : entry->baseFormID;
+                        chosenName = entry->nameDisplay;
+                    }
+                }
+
+                if (chosenId == 0 || usedCandidates.contains(chosenId)) {
+                    continue;
+                }
+
+                // C3 + H5: Route through MatchmakingResult -> ValidateCandidate -> FinalizePartnerAgencyMatches -> ApplyMatch
+                MatchmakingResult r{};
+                r.actorAFormID = ci.partnerID;
+                r.actorBFormID = chosenId;
+                r.actorAName = ci.partnerName;
+                r.actorBName = chosenName.empty() ? ResolveActorNameForAgency(chosenId) : chosenName;
+                r.action = "new";
+                r.targetStatus = "lover";
+                r.isCheating = !ci.isOpenRelationshipLover;
+                r.affairStage = ci.isOpenRelationshipLover
+                                    ? Foundation::AffairStage::Physical
+                                    : Foundation::AffairStage::Talking;
+                r.memory = std::move(reasoning);
+
+                if (ValidateCandidate(r, *snapNow, currentGameDay, /*checkCooldown=*/false)) {
+                    usedCandidates.insert(chosenId);
+                    matches.push_back(std::move(r));
+                } else {
+                    MARAS_LOG_WARN("[AgencyWorkflowCoordinator] Partner agency ValidateCandidate rejected {:08X} <-> {:08X}: {}",
+                                   r.actorAFormID, r.actorBFormID, r.skipReason);
                 }
             }
-            runningPartnerAgency_.store(false, std::memory_order_release);
+
+            FinalizePartnerAgencyMatches(std::move(matches), currentGameDay);
         };
 
+        const std::string llmVariant =
+            GetSkyrimNetGateway().ShouldUseDecisions() ? "decisions" : "gamemaster_evaluation";
         RunLlmBatch<PartnerAgencyBatchItem>(
             Tr("modal.llm_retry.batch_partner_agency"),
-            "gamemaster_evaluation",
+            llmVariant,
             std::move(llmTasks),
             std::move(callbacks),
             GetSessionEpoch());
@@ -2209,33 +2163,217 @@ namespace MARAS::App {
 
     bool AgencyWorkflowCoordinator::EvaluatePartnerHomeArrival(RE::BGSLocation* newLocation) {
         const auto snap = State::WorldStore::GetSingleton().Snapshot();
-        if (!snap->settings || !snap->settings->playerPartnerAgencyEnableHomeArrivalEvents) {
+        if (!snap->settings || !snap->relationships) {
+            return false;
+        }
+        const auto& settings = *snap->settings;
+        if (!settings.playerPartnerCheatingAgencyEnabled && !settings.playerPartnerOpenRelAgencyEnabled) {
+            return false;
+        }
+        if (!settings.playerPartnerAgencyEnableHomeArrivalEvents) {
             return false;
         }
 
         auto* player = RE::PlayerCharacter::GetSingleton();
-        auto* playerLoc = newLocation ? newLocation : (player ? player->GetCurrentLocation() : nullptr);
-        if (!playerLoc) {
+        if (!player || player->IsInCombat() || player->IsDead()) {
+            return false;
+        }
+
+        RE::TESObjectCELL* currentCell = player->GetParentCell();
+        RE::BGSLocation* cellLoc = newLocation ? newLocation : (currentCell ? currentCell->GetLocation() : nullptr);
+        if (!currentCell && !cellLoc) {
+            return false;
+        }
+
+        const RE::FormID cellID = currentCell ? currentCell->GetFormID() : 0;
+        const RE::FormID cellLocID = cellLoc ? cellLoc->GetFormID() : 0;
+        const RE::FormID locationKey = (cellLocID != 0) ? cellLocID : cellID;
+        if (locationKey == 0) {
+            return false;
+        }
+
+        const std::string currentCellName =
+            (currentCell && currentCell->GetName() && currentCell->GetName()[0] != '\0')
+                ? currentCell->GetName()
+                : "UnnamedCell";
+        const std::string currentLocName =
+            (cellLoc && cellLoc->GetName() && cellLoc->GetName()[0] != '\0')
+                ? cellLoc->GetName()
+                : (currentCellName != "UnnamedCell" ? currentCellName : "Home");
+
+        auto& idx = SpatialWorldIndex::GetSingleton();
+        auto& relUseCases = RelationshipUseCases::GetSingleton();
+        const auto playerHouses = HouseholdUseCases::GetSingleton().GetAllPlayerHouses();
+
+        auto isRegisteredPlayerHouse = [&](RE::FormID candidateCellID, RE::BGSLocation* candidateLoc) {
+            for (const RE::FormID phID : playerHouses) {
+                if (phID != 0 && (phID == candidateCellID || (candidateLoc && IsLocationOrParentMatch(candidateLoc, phID)))) {
+                    return true;
+                }
+            }
+            return false;
+        };
+
+        auto matchesOriginalHomeForm = [&](RE::FormID homeFormID) -> bool {
+            if (homeFormID == 0) return false;
+            if (homeFormID == cellID || IsLocationOrParentMatch(cellLoc, homeFormID)) {
+                return true;
+            }
+            if (auto* hCell = RE::TESForm::LookupByID<RE::TESObjectCELL>(homeFormID)) {
+                if (auto* hLoc = hCell->GetLocation(); hLoc && !IsSettlementLevelKeyword(hLoc)) {
+                    if (IsLocationOrParentMatch(cellLoc, hLoc->GetFormID())) {
+                        return true;
+                    }
+                }
+            }
+            return false;
+        };
+
+        // Resolve resident active main partners of the Player at this arrival location
+        std::vector<Domain::Agency::HomeArrivalPartnerCandidate> residentCandidates;
+        for (const auto& [partnerId, st] : snap->relationships->GetActivePartners(Foundation::ActorId::Player())) {
+            if (!Foundation::IsMainTierStatus(st)) {
+                continue;
+            }
+            if (snap->deceased && snap->deceased->IsDeceased(partnerId)) {
+                continue;
+            }
+
+            RE::Actor* livePartner = idx.GetActorFromFormId(partnerId.raw());
+            if (livePartner) {
+                if (livePartner->IsDead() || livePartner->IsDeleted() || livePartner->IsDisabled()) continue;
+                if (Utils::IsPlayerFollower(livePartner)) continue;
+                if (livePartner->IsInCombat()) continue;
+            }
+
+            bool residesHere = false;
+            const RE::FormID tenantHouseID =
+                snap->household ? snap->household->GetTenantHouse(partnerId.raw()).raw() : 0;
+            if (tenantHouseID != 0) {
+                residesHere = (tenantHouseID == cellID || IsLocationOrParentMatch(cellLoc, tenantHouseID));
+            } else {
+                // 1. SpatialWorldIndex original interior home cell
+                const RE::FormID homeCellID = idx.GetNpcHome(partnerId.raw());
+                if (matchesOriginalHomeForm(homeCellID)) {
+                    residesHere = true;
+                }
+                // 2. NPCProfile currentHome / originalHome / homeMarker
+                if (!residesHere) {
+                    if (const auto prof = relUseCases.GetNPCProfile(partnerId.raw())) {
+                        if (prof->currentHome.has_value() && matchesOriginalHomeForm(*prof->currentHome)) {
+                            residesHere = true;
+                        } else if (prof->originalHome.has_value() && matchesOriginalHomeForm(*prof->originalHome)) {
+                            residesHere = true;
+                        } else if (prof->homeMarker.has_value() && *prof->homeMarker != 0) {
+                            if (auto* markerRef = RE::TESForm::LookupByID<RE::TESObjectREFR>(*prof->homeMarker)) {
+                                auto* mCell = markerRef->GetParentCell();
+                                auto* mLoc = markerRef->GetCurrentLocation();
+                                if (!isRegisteredPlayerHouse(mCell ? mCell->GetFormID() : 0, mLoc)) {
+                                    if (mCell && matchesOriginalHomeForm(mCell->GetFormID())) {
+                                        residesHere = true;
+                                    } else if (mLoc && !IsSettlementLevelKeyword(mLoc) &&
+                                               IsLocationOrParentMatch(cellLoc, mLoc->GetFormID())) {
+                                        residesHere = true;
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+                // 3. Static SpatialWorldIndex editorLocationID / placementCellID
+                if (!residesHere) {
+                    if (const auto entryOpt = idx.FindByFormID(partnerId.raw())) {
+                        if (entryOpt->editorLocationID != 0) {
+                            if (auto* edLoc = RE::TESForm::LookupByID<RE::BGSLocation>(entryOpt->editorLocationID);
+                                edLoc && !IsSettlementLevelKeyword(edLoc) &&
+                                IsLocationOrParentMatch(cellLoc, entryOpt->editorLocationID)) {
+                                residesHere = true;
+                            }
+                        }
+                        if (!residesHere && entryOpt->placementCellID != 0) {
+                            if (auto* pCell = RE::TESForm::LookupByID<RE::TESObjectCELL>(entryOpt->placementCellID);
+                                pCell && pCell->IsInteriorCell() && matchesOriginalHomeForm(entryOpt->placementCellID)) {
+                                residesHere = true;
+                            }
+                        }
+                    }
+                }
+            }
+
+            if (!residesHere) {
+                continue;
+            }
+
+            Domain::Agency::HomeArrivalPartnerCandidate cand{};
+            cand.partnerId = partnerId;
+            cand.residesAtPlayerLocation = true;
+            cand.isPartnerInCurrentCell = (livePartner && currentCell && livePartner->GetParentCell() == currentCell);
+            cand.isBusyInScene = (livePartner && livePartner->GetCurrentScene() != nullptr);
+
+            // Flag any live side lovers that are dead/disabled/deleted/follower/in-combat/in-scene
+            auto checkLoverEligibility = [&](Foundation::ActorId lid) {
+                if (lid.IsNull() || lid.IsPlayer()) return;
+                if (RE::Actor* loverActor = idx.GetActorFromFormId(lid.raw())) {
+                    if (loverActor->IsDead() || loverActor->IsDeleted() || loverActor->IsDisabled() ||
+                        Utils::IsPlayerFollower(loverActor) || loverActor->IsInCombat() ||
+                        loverActor->GetCurrentScene() != nullptr) {
+                        cand.ineligibleSideLovers.push_back(lid);
+                    }
+                }
+            };
+            for (const auto& [otherId, otherSt] : snap->relationships->GetActivePartners(partnerId)) {
+                if (otherSt == Foundation::RelationshipStatus::Lover) {
+                    checkLoverEligibility(otherId);
+                }
+            }
+            if (snap->affairs) {
+                for (const auto& rec : snap->affairs->GetByCheater(partnerId)) {
+                    if (rec.deceivedPartner.IsPlayer() && rec.affairStatus == Foundation::AffairStatus::Ongoing) {
+                        checkLoverEligibility(rec.paramour);
+                    }
+                }
+            }
+
+            residentCandidates.push_back(std::move(cand));
+        }
+
+        if (residentCandidates.empty()) {
             return false;
         }
 
         const float currentGameDay = GetCurrentGameDaysSafe();
-        const float intentTTLDays = snap->settings->GetPartnerIntentTTLDays();
-        if (snap->relationships && !snap->relationships->AllPendingIntents().empty()) {
-            State::WorldStore::GetSingleton().Modify([&](State::WorldState& ws) {
-                std::vector<Foundation::ActorId> expired;
-                for (const auto& [pid, rec] : ws.relationships->AllPendingIntents()) {
-                    if (rec.createdGameDay >= 0.0f && (currentGameDay - rec.createdGameDay) > intentTTLDays) {
-                        expired.push_back(pid);
-                    }
+        const float intentTTLDays = settings.GetPartnerIntentTTLDays();
+
+        // Step 0: Lazy TTL expiry for RESIDENT partners only, WITH full consequences (0cebd663:4873-4906)
+        for (const auto& cand : residentCandidates) {
+            const auto intent = snap->relationships->GetPendingIntent(cand.partnerId);
+            if (intent.type != Foundation::PartnerIntentType::None &&
+                intent.createdGameDay >= 0.0f &&
+                (currentGameDay - intent.createdGameDay) >= intentTTLDays) {
+                if (intent.type == Foundation::PartnerIntentType::ConfessTalking) {
+                    State::WorldStore::GetSingleton().Modify([&](State::WorldState& ws) {
+                        ws.relationships.Write().ClearPendingIntent(cand.partnerId);
+                        if (!intent.relatedLover.IsNull()) {
+                            ws.affairs.Write().SetStage(
+                                cand.partnerId,
+                                Foundation::ActorId::Player(),
+                                intent.relatedLover,
+                                Foundation::AffairStage::Physical,
+                                currentGameDay);
+                        }
+                    });
+                } else if (intent.type == Foundation::PartnerIntentType::SuggestClose) {
+                    State::WorldStore::GetSingleton().Modify([&](State::WorldState& ws) {
+                        ws.relationships.Write().ClearPendingIntent(cand.partnerId);
+                    });
+                    const int curAff = relUseCases.GetPermanentAffection(cand.partnerId.raw());
+                    relUseCases.SetPermanentAffection(cand.partnerId.raw(), std::clamp(curAff - 12, 0, 100), true);
+                } else {
+                    State::WorldStore::GetSingleton().Modify([&](State::WorldState& ws) {
+                        ws.relationships.Write().ClearPendingIntent(cand.partnerId);
+                    });
                 }
-                if (!expired.empty()) {
-                    auto& rels = ws.relationships.Write();
-                    for (const auto pid : expired) {
-                        rels.ClearPendingIntent(pid);
-                    }
-                }
-            });
+            }
         }
 
         const auto refreshedSnap = State::WorldStore::GetSingleton().Snapshot();
@@ -2244,17 +2382,18 @@ namespace MARAS::App {
             return false;
         }
 
-        const TavernRendezvousTarget tavern = FindNearbyTavernForRendezvous(playerLoc);
+        const bool hasAnyTavern = HasAnyInteriorInnInWorld();
         Foundation::DeterministicRng rng(static_cast<std::uint32_t>(std::random_device{}()));
 
         const auto planOpt = Domain::Agency::EvaluatePartnerHomeArrival(
             *refreshedSnap,
             *spatialSnap,
-            Foundation::LocationId{ playerLoc->GetFormID() },
-            tavern.found,
+            Foundation::LocationId{ locationKey },
+            hasAnyTavern,
             GetCurrentHourOfDaySafe(),
             currentGameDay,
-            rng);
+            rng,
+            residentCandidates);
         if (!planOpt.has_value()) {
             return false;
         }
@@ -2262,15 +2401,63 @@ namespace MARAS::App {
         auto plan = *planOpt;
         const RE::FormID partnerId = plan.partnerId.raw();
         const RE::FormID loverId = plan.relatedLoverId.raw();
+        const std::string partnerName = ResolveActorNameForAgency(partnerId);
+        const std::string loverName = loverId != 0 ? ResolveActorNameForAgency(loverId) : std::string();
+        const bool isOpen = refreshedSnap->relationships->IsPairOpen(Foundation::ActorId::Player(), plan.partnerId);
         const bool isPriorityIntent = (plan.kind == Domain::Agency::HomeArrivalKind::PendingIntentForcegreet);
 
+        // Priority 1: Pending forcegreet intent — do NOT burn home-arrival location cooldown!
+        if (isPriorityIntent) {
+            const std::string scenario = ResolveHomeArrivalScenarioId(plan, false);
+            if (scenario.empty()) {
+                return false;
+            }
+            const std::string stageStr =
+                (plan.intentType == Foundation::PartnerIntentType::ConfessTalking)
+                    ? "talking"
+                    : ((plan.intentType == Foundation::PartnerIntentType::ConfessPhysical) ? "physical" : "none");
+
+            nlohmann::json payload;
+            payload["scenario"] = scenario;
+            payload["partnerFormId"] = FormatFormId8Hex(partnerId);
+            payload["partnerName"] = partnerName;
+            payload["loverFormId"] = loverId != 0 ? FormatFormId8Hex(loverId) : std::string();
+            payload["loverName"] = loverName;
+            payload["affairStage"] = stageStr;
+            payload["isOpenRelationship"] = isOpen;
+            payload["intentType"] = std::string(Foundation::PartnerIntentTypeToString(plan.intentType));
+            payload["targetLocationFormId"] = FormatFormId8Hex(locationKey);
+            payload["targetLocationName"] = currentLocName;
+
+            EmitModCallbackEvent(
+                "maras_partner_home_arrival_event",
+                payload.dump(-1, ' ', false, nlohmann::json::error_handler_t::replace),
+                1.0f,
+                partnerId);
+
+            MARAS_LOG_INFO("[AgencyWorkflowCoordinator] Dispatched Priority1 home-arrival intent '{}': partner={:08X}, lover={:08X}, loc={:08X}",
+                           scenario, partnerId, loverId, locationKey);
+            return true;
+        }
+
+        // Priority 2: Side-lover home-arrival encounter (in-house or letter/away)
         bool isLetterScenario =
             (plan.kind == Domain::Agency::HomeArrivalKind::OpenDateLetter ||
              plan.kind == Domain::Agency::HomeArrivalKind::CheatingTalkingLetter ||
              plan.kind == Domain::Agency::HomeArrivalKind::CheatingPhysicalLetter);
-        if (isLetterScenario && !tavern.found) {
-            // Downgrade cleanly if tavern rendezvous target could not be resolved.
-            isLetterScenario = false;
+
+        const auto loverLocCtx = ResolveActorLocationContext(loverId, *refreshedSnap);
+        TavernRendezvousTarget tavern{};
+        if (isLetterScenario) {
+            tavern = FindNearbyTavernForRendezvous(cellLoc, loverLocCtx);
+            if (!tavern.found) {
+                RE::Actor* partnerActor = idx.GetActorFromFormId(partnerId);
+                const bool partnerInCell = (partnerActor && currentCell && partnerActor->GetParentCell() == currentCell);
+                if (!partnerInCell) {
+                    return false;
+                }
+                isLetterScenario = false;
+            }
         }
 
         const std::string scenario = ResolveHomeArrivalScenarioId(plan, isLetterScenario);
@@ -2278,30 +2465,33 @@ namespace MARAS::App {
             return false;
         }
 
+        // Burn per-location cooldown ONLY on Priority 2
         State::WorldStore::GetSingleton().Modify([&](State::WorldState& ws) {
-            ws.cooldowns.Write().lastHomeArrivalEventDayByLoc[Foundation::LocationId{ playerLoc->GetFormID() }] =
-                currentGameDay;
+            ws.cooldowns.Write().lastHomeArrivalEventDayByLoc[Foundation::LocationId{ locationKey }] = currentGameDay;
         });
 
-        nlohmann::json payload;
-        payload["scenario"] = scenario;
-        payload["partnerFormId"] = FormatFormId8Hex(partnerId);
-        payload["loverFormId"] = loverId != 0 ? FormatFormId8Hex(loverId) : std::string();
-        payload["targetLocationFormId"] = isLetterScenario ? FormatFormId8Hex(tavern.innLocationID) : std::string();
-        payload["targetMarkerFormId"] = isLetterScenario ? FormatFormId8Hex(tavern.centerMarkerID) : std::string();
-        payload["targetLocationName"] = isLetterScenario
-                                            ? tavern.displayName
-                                            : ResolveHouseDisplayName(refreshedSnap->household
-                                                                          ? refreshedSnap->household->GetTenantHouse(partnerId).raw()
-                                                                          : 0);
+        const std::string targetLocName =
+            isLetterScenario
+                ? tavern.displayName
+                : (!loverLocCtx.subLocationName.empty()
+                       ? loverLocCtx.subLocationName
+                       : (!loverLocCtx.locationName.empty()
+                              ? loverLocCtx.locationName
+                              : ResolveHouseDisplayName(refreshedSnap->household
+                                                            ? refreshedSnap->household->GetTenantHouse(partnerId).raw()
+                                                            : 0)));
+        const RE::FormID targetLocId =
+            isLetterScenario
+                ? tavern.innLocationID
+                : (loverLocCtx.subLocationID != 0
+                       ? loverLocCtx.subLocationID
+                       : (loverLocCtx.settlementLocationID != 0 ? loverLocCtx.settlementLocationID : locationKey));
+        const RE::FormID targetMarkerId = isLetterScenario ? tavern.centerMarkerID : 0;
 
         if (isLetterScenario) {
             const auto catalog = Engine::EncounterConfigLoader::GetSingleton().GetCatalog();
-            const Domain::Agency::EncounterTemplateSpec* tmpl =
-                catalog ? catalog->FindTemplate(scenario) : nullptr;
-            const std::string partnerName = ResolveActorName(partnerId);
+            const Domain::Agency::EncounterTemplateSpec* tmpl = catalog ? catalog->FindTemplate(scenario) : nullptr;
             const std::string playerName = GetPlayerNameSafe();
-            const std::string loverName = loverId != 0 ? ResolveActorName(loverId) : std::string();
 
             Domain::Agency::RenderedEncounterModal rendered;
             if (tmpl) {
@@ -2322,26 +2512,44 @@ namespace MARAS::App {
             req.size = ParseModalSize(rendered.modalSize);
             req.defaultCancelButtonIndex = rendered.defaultCancelButtonIndex;
             req.controls.push_back(ModalControl::MakeInfoBox(
-                rendered.infoBoxId,
-                rendered.infoBoxTitle,
-                rendered.letterBody,
-                req.tone));
+                rendered.infoBoxId, rendered.infoBoxTitle, rendered.letterBody, req.tone));
             req.buttons.push_back(ModalButton::Make(
                 rendered.buttonId.empty() ? std::string("close") : rendered.buttonId,
                 rendered.buttonLabel.empty() ? Tr("modal.encounter_fallback.btn_close") : rendered.buttonLabel,
                 ModalButtonVariant::Primary));
-
             GetModalGateway().ShowModal(std::move(req), nullptr);
         }
+
+        const std::string stageStr =
+            (plan.kind == Domain::Agency::HomeArrivalKind::CheatingTalkingLetter ||
+             plan.kind == Domain::Agency::HomeArrivalKind::CheatingTalkingInHouse)
+                ? "talking"
+                : ((plan.kind == Domain::Agency::HomeArrivalKind::CheatingPhysicalLetter ||
+                    plan.kind == Domain::Agency::HomeArrivalKind::CheatingPhysicalInHouse)
+                       ? "physical"
+                       : "none");
+
+        nlohmann::json payload;
+        payload["scenario"] = scenario;
+        payload["partnerFormId"] = FormatFormId8Hex(partnerId);
+        payload["partnerName"] = partnerName;
+        payload["loverFormId"] = loverId != 0 ? FormatFormId8Hex(loverId) : std::string();
+        payload["loverName"] = loverName;
+        payload["affairStage"] = stageStr;
+        payload["isOpenRelationship"] = isOpen;
+        payload["intentType"] = "none";
+        payload["targetLocationFormId"] = targetLocId != 0 ? FormatFormId8Hex(targetLocId) : std::string();
+        payload["targetMarkerFormId"] = targetMarkerId != 0 ? FormatFormId8Hex(targetMarkerId) : std::string();
+        payload["targetLocationName"] = targetLocName;
 
         EmitModCallbackEvent(
             "maras_partner_home_arrival_event",
             payload.dump(-1, ' ', false, nlohmann::json::error_handler_t::replace),
-            isPriorityIntent ? 1.0f : 0.0f,
+            0.0f,
             partnerId);
 
-        MARAS_LOG_INFO("[AgencyWorkflowCoordinator] Dispatched maras_partner_home_arrival_event: scenario='{}', partner={:08X}, lover={:08X}, loc={:08X}",
-                       scenario, partnerId, loverId, playerLoc->GetFormID());
+        MARAS_LOG_INFO("[AgencyWorkflowCoordinator] Dispatched Priority2 home-arrival event: scenario='{}', partner={:08X}, lover={:08X}, loc={:08X}",
+                       scenario, partnerId, loverId, locationKey);
         return true;
     }
 

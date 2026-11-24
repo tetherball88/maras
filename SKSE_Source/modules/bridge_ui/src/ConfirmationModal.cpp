@@ -51,7 +51,7 @@ namespace MARAS::Bridge::Ui {
 
         // CheckAndSetConfirmationCooldown return codes (`ConfirmationModal.h`):
         constexpr std::int32_t kCooldownEligible = 0;
-        constexpr std::int32_t kCooldownBlocked = 4;
+        constexpr std::int32_t kCooldownBlocked = 1;
 
         struct CooldownRecord {
             std::chrono::steady_clock::time_point timestamp;
@@ -403,16 +403,6 @@ namespace MARAS::Bridge::Ui {
         }
 
         const auto settingsSnap = App::SettingsCoordinator::GetSingleton().Snapshot();
-        const bool skipModalParam =
-            paramsObj.contains("skipModal") && paramsObj["skipModal"].is_boolean() && paramsObj["skipModal"].get<bool>();
-        if (skipModalParam || (settingsSnap && !IsConfirmationEnabledForAction(*settingsSnap, action, involvesPlayer))) {
-            MARAS_LOG_DEBUG("[ConfirmationModal] Action '{}' disabled by settings/param; auto-accepting (4)", action);
-            if (onResult) {
-                onResult(kResultDisabledAutoAccept);
-            }
-            return;
-        }
-
         const std::string cooldownKey = BuildCooldownKey(action, allIds);
         {
             const std::int32_t actionSecs = settingsSnap ? settingsSnap->actionsCooldown : 10;
@@ -435,8 +425,20 @@ namespace MARAS::Bridge::Ui {
             }
         }
 
+        const bool skipModalParam =
+            paramsObj.contains("skipModal") && paramsObj["skipModal"].is_boolean() && paramsObj["skipModal"].get<bool>();
+        if (skipModalParam || (settingsSnap && !IsConfirmationEnabledForAction(*settingsSnap, action, involvesPlayer))) {
+            MARAS_LOG_DEBUG("[ConfirmationModal] Action '{}' disabled by settings/param; auto-accepting (4)", action);
+            RecordCooldownTimestamp(&ConfirmationCooldownState::actionCooldowns, cooldownKey);
+            if (onResult) {
+                onResult(kResultDisabledAutoAccept);
+            }
+            return;
+        }
+
         if (!UIManager::GetSingleton().IsInitialized()) {
             MARAS_LOG_WARN("[ConfirmationModal] UI unavailable for '{}'; auto-accepting (5)", action);
+            RecordCooldownTimestamp(&ConfirmationCooldownState::actionCooldowns, cooldownKey);
             if (onResult) {
                 onResult(kResultUiUnavailableAutoAccept);
             }
@@ -456,6 +458,15 @@ namespace MARAS::Bridge::Ui {
         const std::string actorBName = ActorSvc::GetName(actorBId);
         const ActionDisplayMeta meta = DescribeAction(action, actorAName, actorBName);
 
+        std::string activity;
+        std::string details;
+        if (auto it = paramsObj.find("activity"); it != paramsObj.end() && it->is_string()) {
+            activity = it->get<std::string>();
+        }
+        if (auto it = paramsObj.find("details"); it != paramsObj.end() && it->is_string()) {
+            details = it->get<std::string>();
+        }
+
         ModalRequest req;
         req.modalType = "generic";
         req.title = meta.title;
@@ -472,9 +483,19 @@ namespace MARAS::Bridge::Ui {
         }
         if (auto it = paramsObj.find("message"); it != paramsObj.end() && it->is_string() && !it->get_ref<const std::string&>().empty()) {
             req.message = it->get<std::string>();
-        } else if (auto itReason = paramsObj.find("reason");
-                   itReason != paramsObj.end() && itReason->is_string() && !itReason->get_ref<const std::string&>().empty()) {
-            req.message.append(MARAS::TrFmt("modal.common.reason_suffix", { { "reason", itReason->get<std::string>() } }));
+        } else {
+            if (!activity.empty()) {
+                req.message.append("\nActivity: ");
+                req.message.append(activity);
+            }
+            if (!details.empty()) {
+                req.message.append("\nDetails: ");
+                req.message.append(details);
+            }
+            if (auto itReason = paramsObj.find("reason");
+                itReason != paramsObj.end() && itReason->is_string() && !itReason->get_ref<const std::string&>().empty()) {
+                req.message.append(MARAS::TrFmt("modal.common.reason_suffix", { { "reason", itReason->get<std::string>() } }));
+            }
         }
 
         const bool skyrimNetAvailable = App::GetSkyrimNetGateway().IsAvailable();
@@ -483,6 +504,7 @@ namespace MARAS::Bridge::Ui {
             req.buttons.push_back(ModalButton::Make("decline_explain", MARAS::Tr("modal.common.decline_explain"), ModalButtonVariant::Outline));
         }
         req.buttons.push_back(ModalButton::Make("cancel", MARAS::Tr("modal.common.cancel"), ModalButtonVariant::Secondary));
+        req.defaultCancelButtonIndex = skyrimNetAvailable ? 2 : 1;
 
         MARAS_LOG_DEBUG(
             "[ConfirmationModal] Showing modal '{}' for {:08X} ({}) & {:08X} ({}) [SkyrimNet={}]",
@@ -520,6 +542,7 @@ namespace MARAS::Bridge::Ui {
             [expectedEpoch,
              action,
              metaLabel = meta.label,
+             activity = std::move(activity),
              isOpenToggle = meta.isOpenToggle,
              cooldownKey,
              actorAId,
@@ -573,9 +596,10 @@ namespace MARAS::Bridge::Ui {
                     if (App::GetSkyrimNetGateway().IsAvailable()) {
                         const RE::FormID speakerId = (actorAId != MARAS::kPlayerFormID) ? actorAId : actorBId;
                         const RE::FormID targetId = (actorAId != speakerId) ? actorAId : actorBId;
+                        const std::string& declineLabel = !activity.empty() ? activity : metaLabel;
                         const std::string msg = std::format(
                             "The player declined {} involving {} and {} and wishes to explain.",
-                            metaLabel,
+                            declineLabel,
                             actorAName,
                             actorBName);
                         App::GetSkyrimNetGateway().EmitActionDecline(

@@ -1,16 +1,16 @@
 #pragma once
 
 #include "maras/app/ModalTypes.h"
+#include "maras/state/ModalQueueStateMachine.h"
 #include "maras/state/SessionEpoch.h"
 
 #include <nlohmann/json.hpp>
 
 #include <atomic>
 #include <cstdint>
-#include <deque>
 #include <mutex>
-#include <optional>
 #include <string>
+#include <unordered_map>
 #include <vector>
 
 namespace MARAS::Bridge::Ui {
@@ -59,28 +59,24 @@ namespace MARAS::Bridge::Ui {
         /// Cancels all active and queued modals cleanly (with `aborted = true`) on save load/revert.
         void Revert();
 
+        /// Aborts all active and queued modals (with `aborted = true` and `defaultCancelButtonIndex`)
+        /// when the UI host/view is unavailable, destroyed, or render-dead.
+        void AbortAllModals(const char* reason = "UI unavailable");
+
     private:
         ModalManager() = default;
         ~ModalManager() = default;
 
-        struct ModalEntry {
-            std::string modalId;
-            std::string specJson;
-            std::vector<std::string> buttonIds{};
-            ModalCallback callback;
-            MARAS::State::SessionEpoch expectedEpoch{ 0 };
-        };
-
         std::string EnqueueEntry(std::string modalId,
                                  std::string specJson,
                                  std::vector<std::string> buttonIds,
+                                 std::int32_t defaultCancelButtonIndex,
                                  ModalCallback callback);
         void ScheduleProcessQueue();
 
         mutable std::mutex mutex_;
-        std::optional<ModalEntry> activeModal_;
-        std::deque<ModalEntry> queue_;
-        std::string lastSentModalId_;
+        MARAS::State::ModalQueueStateMachine queueState_;
+        std::unordered_map<std::uint64_t, ModalCallback> callbacks_;
         std::atomic<std::uint64_t> nextId_{ 1 };
     };
 

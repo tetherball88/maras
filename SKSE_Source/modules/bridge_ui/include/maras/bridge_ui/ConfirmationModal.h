@@ -11,7 +11,7 @@ namespace MARAS::Bridge::Ui {
     /// Papyrus-facing non-blocking confirmation modal helper backed by ModalManager.
     class ConfirmationModal {
     public:
-        /// Checks confirmation cooldown and marks the timestamp on accept; returns 0=eligible, 4=on-cooldown.
+        /// Checks confirmation cooldown and marks the timestamp on accept; returns 0=eligible, 1=on-cooldown.
         static std::int32_t CheckAndSet(const char* actionType, const std::vector<RE::Actor*>& actors);
 
         /// Returns true if the given action/actor pair is currently within its confirmation cooldown window.

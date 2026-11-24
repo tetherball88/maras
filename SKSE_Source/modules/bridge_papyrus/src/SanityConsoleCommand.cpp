@@ -76,6 +76,9 @@ namespace MARAS::PapyrusInterface {
             if (CaseInsensitiveEquals(step, "s4_post") || CaseInsensitiveEquals(step, "scenario4_post")) {
                 return "RunScenario4PostLoad";
             }
+            if (CaseInsensitiveEquals(step, "s5") || CaseInsensitiveEquals(step, "scenario5")) {
+                return "RunScenario5";
+            }
             if (CaseInsensitiveEquals(step, "all_pre") || CaseInsensitiveEquals(step, "all")) {
                 return "RunAllPreSave";
             }
@@ -97,7 +100,7 @@ namespace MARAS::PapyrusInterface {
             }
             std::vector<RE::FormID> toRemove;
             for (const auto& [cid, rec] : snap->lineage->AllChildren()) {
-                if (rec.name == "SanityAdultFF" || rec.name == "SanityOrphanFF") {
+                if (rec.name == "SanityAdultFF" || rec.name == "SanityOrphanFF" || rec.name == "SanityTrainee") {
                     toRemove.push_back(cid.raw());
                 }
             }
@@ -126,6 +129,12 @@ namespace MARAS::PapyrusInterface {
             }
         }
 
+        void RunPostRestoreForcegreetAndDump() {
+            std::lock_guard<MARAS::PapyrusDomainMutex> lock(MARAS::GetPapyrusMutex());
+            App::LineageUseCases::GetSingleton().RollForcegreetForHousehold();
+            (void)App::GetUiBridgeGateway().DumpStoredData("s4_post_forcegreet");
+        }
+
         class SanityCallCallback final : public RE::BSScript::IStackCallbackFunctor {
         public:
             SanityCallCallback(SessionEpoch expectedEpoch, std::string functionName) noexcept
@@ -146,6 +155,14 @@ namespace MARAS::PapyrusInterface {
                         }
                         MarkSanityOrphanDynamicChildrenDeleted();
                     });
+                } else if (functionName_ == "RunScenario4PostLoad") {
+                    const SessionEpoch ep = expectedEpoch_;
+                    (void)AddEpochTask(ep, "SanityConsoleCommand::RollForcegreetAndDump", [ep]() {
+                        if (!IsSessionEpochCurrent(ep)) {
+                            return;
+                        }
+                        RunPostRestoreForcegreetAndDump();
+                    });
                 }
             }
 
@@ -158,7 +175,7 @@ namespace MARAS::PapyrusInterface {
 
         void PrintUsage() {
             PrintConsoleLine(
-                "Usage: maras_sanity <prep | s1 | s2 | s3 | s4_pre | s4_post | all_pre | dump [tag] | migration_test>");
+                "Usage: maras_sanity <prep | s1 | s2 | s3 | s4_pre | s4_post | s5 | all_pre | dump [tag] | migration_test>");
         }
 
         bool ExecuteSanityConsoleCommand(
@@ -315,13 +332,13 @@ namespace MARAS::PapyrusInterface {
         }
 
         static RE::SCRIPT_PARAMETER s_params[] = {
-            { "Step (prep|s1|s2|s3|s4_pre|s4_post|all_pre|dump)", RE::SCRIPT_PARAM_TYPE::kChar, true },
+            { "Step (prep|s1|s2|s3|s4_pre|s4_post|s5|all_pre|dump)", RE::SCRIPT_PARAM_TYPE::kChar, true },
             { "Tag (optional, for dump)", RE::SCRIPT_PARAM_TYPE::kChar, true },
         };
 
         cmd->functionName = "maras_sanity";
         cmd->shortName = "msanity";
-        cmd->helpString = "maras_sanity <prep|s1|s2|s3|s4_pre|s4_post|all_pre|dump> [tag]";
+        cmd->helpString = "maras_sanity <prep|s1|s2|s3|s4_pre|s4_post|s5|all_pre|dump> [tag]";
         cmd->referenceFunction = false;
         cmd->SetParameters(s_params);
         cmd->executeFunction = &ExecuteSanityConsoleCommand;

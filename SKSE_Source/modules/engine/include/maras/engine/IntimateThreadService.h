@@ -136,7 +136,8 @@ namespace MARAS {
                                      RE::Actor* partnerActor,
                                      const std::string& framework,
                                      std::int32_t threadID,
-                                     bool isWalkIn);
+                                     bool isWalkIn,
+                                     RE::FormID fallbackPartnerID = 0);
         void SendOpenRelationshipWalkInEvent(RE::Actor* witnessActor,
                                              RE::Actor* partnerActor,
                                              RE::Actor* sexPartnerActor,

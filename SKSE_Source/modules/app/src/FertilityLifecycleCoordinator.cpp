@@ -629,9 +629,10 @@ namespace MARAS::App {
             (prov == Domain::Lineage::FertilityProvider::BeeingFemale && lossReason == "stillbirth" && bioFatherId != 0);
         const RE::FormID filterFatherArg = filterByFather ? bioFatherId : 0;
 
+        const bool preserveDeliveryBatch = (prov == Domain::Lineage::FertilityProvider::BeeingFemale);
         bool removed = false;
         if (requireRemovedRecord || pw.IsNPCPregnant(motherId) || pw.FindUnbornChild(motherId) != 0) {
-            removed = pw.RemoveUnbornChild(motherId, filterFatherArg);
+            removed = pw.RemoveUnbornChild(motherId, filterFatherArg, preserveDeliveryBatch);
         }
 
         if (!requireRemovedRecord || removed) {

@@ -172,6 +172,13 @@ namespace MARAS::Domain::Household {
                 continue;
             }
 
+            const auto* actorSample = spatial.Find(RefId{ cid.raw() });
+            if (actorSample &&
+                (actorSample->IsDead() || actorSample->IsDeleted() || actorSample->IsDisabled() ||
+                 actorSample->IsPlayerTeammate() || actorSample->IsInCombat() || actorSample->IsInScene())) {
+                continue;
+            }
+
             const auto* recPtr = ws.household.Read().FindAdultChildTravel(cid);
             if (!recPtr) {
                 continue;
@@ -184,7 +191,7 @@ namespace MARAS::Domain::Household {
 
             bool justArrived = false;
             if (rec.arrivedGameDay < 0.0f) {
-                if (const auto* actorSample = spatial.Find(RefId{ cid.raw() })) {
+                if (actorSample) {
                     bool reached = false;
                     if (!rec.targetLocationId.IsNull() &&
                         actorSample->currentLocationId == rec.targetLocationId) {
@@ -221,10 +228,17 @@ namespace MARAS::Domain::Household {
 
         for (const auto& [cid, childRec] : ws.lineage.Read().AllChildren()) {
             (void)childRec;
-            if (IsTravelEligibleAdultChild(ws, cid) &&
-                ws.household.Read().FindAdultChildTravel(cid) == nullptr) {
-                out.unassignedEligibleAdults.push_back(cid);
+            if (!IsTravelEligibleAdultChild(ws, cid) ||
+                ws.household.Read().FindAdultChildTravel(cid) != nullptr) {
+                continue;
             }
+            const auto* actorSample = spatial.Find(RefId{ cid.raw() });
+            if (actorSample &&
+                (actorSample->IsDead() || actorSample->IsDeleted() || actorSample->IsDisabled() ||
+                 actorSample->IsPlayerTeammate() || actorSample->IsInCombat() || actorSample->IsInScene())) {
+                continue;
+            }
+            out.unassignedEligibleAdults.push_back(cid);
         }
         std::sort(out.unassignedEligibleAdults.begin(), out.unassignedEligibleAdults.end());
         out.unassignedEligibleAdults.erase(

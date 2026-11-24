@@ -513,8 +513,6 @@ namespace MARAS::Bridge::Ui {
                 try {
                     std::lock_guard papyrusLock(MARAS::GetPapyrusMutex());
                     UIManager::GetSingleton().OnUIReady();
-                    SendLocaleDataOnMainThread();
-                    SendSettingsDataOnMainThread();
                 } catch (const std::exception& e) {
                     MARAS_LOG_ERROR("[UIDataBridge] Exception for action 'uiReady': {}", e.what());
                 } catch (...) {
@@ -544,7 +542,6 @@ namespace MARAS::Bridge::Ui {
     void UIDataBridge::HandleAction(const std::string& type, const nlohmann::json& payload) {
         if (type == "uiReady") {
             UIManager::GetSingleton().OnUIReady();
-            SendLocaleData();
         } else if (type == "fetchLocale") {
             SendLocaleData();
         } else if (type == "reloadLocalization") {
@@ -696,6 +693,14 @@ namespace MARAS::Bridge::Ui {
         });
     }
 
+    void UIDataBridge::SendSettingsDataOnMainThreadSafe() {
+        if (MARAS::DeferredActorResolver::GetSingleton().IsOnMainThread()) {
+            SendSettingsDataOnMainThread();
+        } else {
+            SendSettingsData();
+        }
+    }
+
     void UIDataBridge::SendSettingsDataOnMainThread() {
         if (!UIManager::GetSingleton().IsDomReady()) {
             return;
@@ -803,7 +808,7 @@ namespace MARAS::Bridge::Ui {
     }
 
     void UIDataBridge::SendAllSkyrimNPCs() {
-        if (!UIManager::GetSingleton().IsDashboardOpen()) {
+        if (!UIManager::GetSingleton().IsDomReady()) {
             return;
         }
         DispatchBridgeMainThread("UIDataBridge::SendAllSkyrimNPCs", [this]() {
@@ -812,7 +817,7 @@ namespace MARAS::Bridge::Ui {
     }
 
     void UIDataBridge::SendAllSkyrimNPCsOnMainThread() {
-        if (!IsDashboardReadyAndOpen()) {
+        if (!UIManager::GetSingleton().IsDomReady()) {
             return;
         }
         UIManager::GetSingleton().SendToUI(
@@ -837,6 +842,9 @@ namespace MARAS::Bridge::Ui {
         const bool revealSecrets = MARAS::App::SettingsCoordinator::GetSingleton().Snapshot()->revealSecretsInUI;
         nlohmann::json arr = nlohmann::json::array();
         for (const auto& r : results) {
+            if (r.skipped) {
+                continue;
+            }
             const bool maskCheat = (!revealSecrets && r.isCheating);
             nlohmann::json item;
             item["actorAFormId"] = FormIDToString(r.actorAFormID);
@@ -2578,6 +2586,21 @@ namespace MARAS::Bridge::Ui {
         std::string blockReason;
         if (lineage.IsChildBlockedFromAdoption(childID, &blockReason)) {
             MARAS_LOG_WARN("[UIDataBridge] ProcessAddChild blocked for child {:08X}: {}", childID, blockReason);
+            std::string localizedReason = blockReason;
+            if (localizedReason.starts_with("Performing the Black Sacrament")) {
+                localizedReason = MARAS::Tr("common.adoption_blocked_black_sacrament");
+            }
+            if (localizedReason.empty()) {
+                localizedReason = MARAS::Tr("common.action_rejected_default");
+            }
+            nlohmann::json rej;
+            rej["action"] = "addChild";
+            rej["actorA"] = FormIDToString(actorA);
+            rej["actorB"] = FormIDToString(actorB);
+            rej["reason"] = localizedReason;
+            UIManager::GetSingleton().SendToUI("onActionRejected", DumpJsonSafe(rej));
+            SendOverviewData();
+            SendNPCDetail(childID);
             return;
         }
 
@@ -2586,6 +2609,13 @@ namespace MARAS::Bridge::Ui {
             auto* childActor = RE::TESForm::LookupByID<RE::Actor>(childID);
             if (!childActor) {
                 MARAS_LOG_ERROR("[UIDataBridge] ProcessAddChild failed: child {:08X} Actor not found", childID);
+                nlohmann::json rej;
+                rej["action"] = "addChild";
+                rej["actorA"] = FormIDToString(actorA);
+                rej["actorB"] = FormIDToString(actorB);
+                rej["reason"] = MARAS::Tr("common.action_rejected_default");
+                UIManager::GetSingleton().SendToUI("onActionRejected", DumpJsonSafe(rej));
+                SendOverviewData();
                 return;
             }
             MARAS_LOG_INFO("[UIDataBridge] Player adoption child {:08X} (spouse={:08X}, house={:08X}) -> AdoptChildGlobal (closing dashboard and waiting for focus release)",
@@ -2719,7 +2749,7 @@ namespace MARAS::Bridge::Ui {
 
         if (payload.contains("hasBeastblood")) {
             const bool reqBeast = GetJsonBool(payload, "hasBeastblood", false);
-            if (hasHiddenPaternity && existing && existing->hasBeastblood && !reqBeast) {
+            if (!revealSecrets && existing && existing->hasBeastblood && !reqBeast) {
                 MARAS_LOG_DEBUG("[UIDataBridge] Preserving masked hasBeastblood for child {:08X}", childID);
             } else {
                 changed |= lineage.SetChildBeastblood(childID, reqBeast);
@@ -2844,6 +2874,17 @@ namespace MARAS::Bridge::Ui {
             for (const RE::FormID memberID : relocated) {
                 SendNPCDetail(memberID);
             }
+        } else {
+            MARAS_LOG_WARN("[UIDataBridge] ProcessRelocateFamilyUnit rejected (npc={:08X}, house='{}', resolvedHouse={:08X})",
+                           npcFormID, houseStr, explicitHouseID);
+            nlohmann::json rej;
+            rej["action"] = "relocateFamilyUnit";
+            if (npcFormID != 0) {
+                rej["actorA"] = FormIDToString(npcFormID);
+            }
+            rej["reason"] = MARAS::Tr("common.action_rejected_default");
+            UIManager::GetSingleton().SendToUI("onActionRejected", DumpJsonSafe(rej));
+            SendOverviewData();
         }
     }
 
@@ -2954,33 +2995,42 @@ namespace MARAS::Bridge::Ui {
         const std::string formStr = GetJsonString(payload, "formId");
         auto& agency = MARAS::App::AgencyWorkflowCoordinator::GetSingleton();
         if (formStr.empty() || formStr == "global" || formStr == "all" || formStr == "any") {
-            (void)agency.RunGlobalMatchmaking();
+            (void)agency.RunGlobalMatchmaking(/*autoApply=*/false);
             return;
         }
         const RE::FormID targetId = ResolveToPlacedRefID(StringToFormID(formStr));
         if (targetId != 0) {
             (void)agency.RunManualMatchmaking({ targetId });
         } else {
-            (void)agency.RunGlobalMatchmaking();
+            (void)agency.RunGlobalMatchmaking(/*autoApply=*/false);
         }
     }
 
-    void UIDataBridge::ProcessSkyrimNetGlobalMatchSuggest(const nlohmann::json& /*payload*/) {
-        (void)MARAS::App::AgencyWorkflowCoordinator::GetSingleton().RunGlobalMatchmaking();
+    void UIDataBridge::ProcessSkyrimNetGlobalMatchSuggest(const nlohmann::json& payload) {
+        const bool autoApply = GetJsonBool(payload, "autoApply", false);
+        (void)MARAS::App::AgencyWorkflowCoordinator::GetSingleton().RunGlobalMatchmaking(autoApply);
     }
 
     void UIDataBridge::ProcessGenerateMatchMemories(const nlohmann::json& payload) {
+        const RE::FormID rawPartnerId = StringToFormID(GetJsonString(payload, "partnerFormId"));
+        const RE::FormID targetId = ResolveToPlacedRefID(StringToFormID(GetJsonString(payload, "targetFormId")));
+        const RE::FormID partnerId = ResolveToPlacedRefID(rawPartnerId);
+        const RE::FormID replyPartnerId = (partnerId != 0) ? partnerId : rawPartnerId;
+
         if (!MARAS::App::GetSkyrimNetGateway().IsAvailable()) {
             MARAS_LOG_DEBUG("[UIDataBridge] generateMatchMemories skipped: SkyrimNet unavailable");
+            if (replyPartnerId != 0) {
+                SendGeneratedMemories(replyPartnerId, nlohmann::json::array());
+            }
             return;
         }
-        const RE::FormID targetId = ResolveToPlacedRefID(StringToFormID(GetJsonString(payload, "targetFormId")));
-        const RE::FormID partnerId = ResolveToPlacedRefID(StringToFormID(GetJsonString(payload, "partnerFormId")));
         const std::string targetStatus = GetJsonString(payload, "targetStatus", "dating");
         const std::string action = GetJsonString(payload, "action", "new");
         if (targetId != 0 && partnerId != 0) {
             MARAS::App::GetSkyrimNetGateway().PreviewRelationshipMemories(
                 targetId, partnerId, targetStatus, action);
+        } else if (replyPartnerId != 0) {
+            SendGeneratedMemories(replyPartnerId, nlohmann::json::array());
         }
     }
 

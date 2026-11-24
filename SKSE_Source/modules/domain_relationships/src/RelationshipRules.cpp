@@ -500,7 +500,10 @@ namespace MARAS::Domain::Relationships {
                     outcome.appliedAutoOpen = true;
                 } else if (IsBreakupStatusIncludingCandidate(targetStatus) && (wasOpenBefore || postEdge->isOpen)) {
                     if (postEdge->isOpen) {
-                        outcome.mutations.Merge(ws.SetPairOpen(actorA, actorB, false, currentGameDay));
+                        ws.relationships.Write().GetOrCreateEdge(actorA, actorB).isOpen = false;
+                        outcome.mutations.changed = true;
+                        outcome.mutations.MarkActorDirty(actorA);
+                        outcome.mutations.MarkActorDirty(actorB);
                     }
                     outcome.resetOpenOnBreakup = true;
                 }

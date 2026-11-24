@@ -50,8 +50,9 @@ namespace MARAS {
     }
 
     void BuffReconciler::InvalidateCache() {
+        std::lock_guard lock(cacheMutex_);
         cacheValid_ = false;
-        perkGroups_.clear();
+        perkGroups_.reset();
     }
 
     void BuffReconciler::Revert() {
@@ -60,12 +61,16 @@ namespace MARAS {
         InvalidateCache();
     }
 
-    void BuffReconciler::RebuildCacheIfNeeded() {
-        if (cacheValid_) {
-            return;
+    std::shared_ptr<const std::vector<BuffReconciler::PerkGroup>> BuffReconciler::GetOrRebuildCache() {
+        {
+            std::lock_guard lock(cacheMutex_);
+            if (cacheValid_ && perkGroups_) {
+                return perkGroups_;
+            }
         }
 
-        perkGroups_.clear();
+        // Resolve perk forms outside cacheMutex_ (never call TESForm::LookupByID under a leaf mutex).
+        std::vector<PerkGroup> builtGroups;
         const auto& bonuses = Engine::BonusesConfigLoader::GetSingleton();
         std::unordered_map<RE::BGSPerk*, std::size_t> perkToGroupIdx;
 
@@ -93,11 +98,11 @@ namespace MARAS {
                 if (auto it = perkToGroupIdx.find(perk); it != perkToGroupIdx.end()) {
                     groupIdx = it->second;
                 } else {
-                    groupIdx = perkGroups_.size();
+                    groupIdx = builtGroups.size();
                     perkToGroupIdx.emplace(perk, groupIdx);
                     PerkGroup group{};
                     group.perk = perk;
-                    perkGroups_.push_back(std::move(group));
+                    builtGroups.push_back(std::move(group));
                 }
 
                 CachedEntryRef ref{};
@@ -106,7 +111,7 @@ namespace MARAS {
                 ref.effectIndex = be->effectIndex;
                 ref.type = Foundation::StringUtils::ToLowerStd(be->type);
                 ref.baseValue = be->value;
-                perkGroups_[groupIdx].entries.push_back(std::move(ref));
+                builtGroups[groupIdx].entries.push_back(std::move(ref));
             }
         };
 
@@ -117,9 +122,19 @@ namespace MARAS {
             appendCategory(false, i, kSkillTypeKeys[i]);
         }
 
-        cacheValid_ = true;
+        auto snapshot = std::make_shared<const std::vector<PerkGroup>>(std::move(builtGroups));
+        {
+            std::lock_guard lock(cacheMutex_);
+            if (!cacheValid_ || !perkGroups_) {
+                perkGroups_ = snapshot;
+                cacheValid_ = true;
+            } else {
+                snapshot = perkGroups_;
+            }
+        }
         MARAS_LOG_DEBUG("[BuffReconciler] Cached {} grouped bonus perk(s) from bonuses.json",
-                        perkGroups_.size());
+                        snapshot->size());
+        return snapshot;
     }
 
     void BuffReconciler::ReconcilePlayerBuffs() {
@@ -146,8 +161,8 @@ namespace MARAS {
             return;
         }
 
-        RebuildCacheIfNeeded();
-        if (perkGroups_.empty()) {
+        const auto groupsSnap = GetOrRebuildCache();
+        if (!groupsSnap || groupsSnap->empty()) {
             return;
         }
 
@@ -172,7 +187,7 @@ namespace MARAS {
         std::size_t updatedPerkCount = 0;
         std::size_t removedPerkCount = 0;
 
-        for (const auto& group : perkGroups_) {
+        for (const auto& group : *groupsSnap) {
             RE::BGSPerk* perk = group.perk;
             if (!perk || group.entries.empty()) {
                 continue;

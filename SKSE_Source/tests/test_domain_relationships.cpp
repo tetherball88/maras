@@ -1475,4 +1475,73 @@ namespace MARAS::Tests {
         MARAS_CHECK_EQ(endEval.eligiblePartners[0], nonRelative);
     }
 
+    MARAS_TEST(DomainRelationships, DemoteToCandidateClearsOpenWithoutBreakingSideLovers) {
+        WorldState ws{};
+        StubMetadataProvider meta{};
+        const ActorId a{ 0x00019501u };
+        const ActorId b{ 0x00019502u };
+        const ActorId loverA{ 0x00019503u };
+        const ActorId loverB{ 0x00019504u };
+        for (const ActorId id : { a, b, loverA, loverB }) {
+            RegisterAdult(ws, id);
+        }
+
+        (void)ApplyRelationshipTransition(ws, a, b, RelationshipStatus::Married, 1.0f, a, meta);
+        const auto opened = ApplySetPairOpen(ws, a, b, true, 2.0f);
+        MARAS_CHECK(opened.changed && !opened.wasOpen);
+        // No-op re-open preserves wasOpen == true and changed == false
+        const auto noopOpen = ApplySetPairOpen(ws, a, b, true, 2.5f);
+        MARAS_CHECK(noopOpen.wasOpen);
+        MARAS_CHECK(!noopOpen.changed);
+
+        (void)ApplyRelationshipTransition(ws, a, loverA, RelationshipStatus::Lover, 3.0f, a, meta);
+        (void)ApplyRelationshipTransition(ws, b, loverB, RelationshipStatus::Lover, 3.0f, b, meta);
+
+        // Demoting open main pair (a, b) to Candidate resets isOpen=false WITHOUT breaking (a, loverA) or (b, loverB)
+        const auto demoted = ApplyRelationshipTransition(ws, a, b, RelationshipStatus::Candidate, 4.0f, a, meta);
+        MARAS_REQUIRE(demoted.allowed);
+        MARAS_CHECK(demoted.resetOpenOnBreakup);
+        MARAS_CHECK(!ws.relationships.Read().IsPairOpen(a, b));
+        MARAS_CHECK_EQ(ws.relationships.Read().GetStatus(a, loverA), RelationshipStatus::Lover);
+        MARAS_CHECK_EQ(ws.relationships.Read().GetStatus(b, loverB), RelationshipStatus::Lover);
+    }
+
+    MARAS_TEST(DomainRelationships, AffairStageWildcardClampAndConfessIntentUpgrade) {
+        WorldState ws{};
+        StubMetadataProvider meta{};
+        const ActorId spouse{ 0x00019601u };
+        const ActorId npcVictim{ 0x00019602u };
+        const ActorId paramour{ 0x00019603u };
+        for (const ActorId id : { spouse, npcVictim, paramour }) {
+            RegisterAdult(ws, id);
+        }
+
+        // Player-victim Talking affair with ConfessTalking intent -> wildcard SetAffairStage(Physical) upgrades intent
+        (void)ApplyRecordCheating(
+            ws, spouse, ActorId::Player(), paramour, true,
+            AffairType::Lover, AffairStatus::Ongoing, AffairStage::Talking, 1.0f);
+        ws.relationships.Write().SetPendingIntent(spouse, PendingPartnerIntentRecord{
+            .type = PartnerIntentType::ConfessTalking,
+            .createdGameDay = 1.5f,
+            .relatedLover = paramour,
+        });
+        MARAS_CHECK_EQ(GetEffectiveAffairStage(ws.Snapshot(), spouse, ActorId::Player(), ActorId{}), AffairStage::Talking);
+
+        const auto stageOut = ApplySetAffairStage(ws, spouse, ActorId::Player(), ActorId{}, AffairStage::Physical, 2.0f);
+        MARAS_CHECK(stageOut.updated);
+        MARAS_CHECK(stageOut.intentUpgraded);
+        MARAS_CHECK_EQ(stageOut.upgradedLover, paramour);
+        MARAS_CHECK_EQ(GetEffectiveAffairStage(ws.Snapshot(), spouse, ActorId::Player(), paramour), AffairStage::Physical);
+        MARAS_CHECK_EQ(ws.relationships.Read().GetPendingIntent(spouse).type, PartnerIntentType::ConfessPhysical);
+
+        // Non-player victim always clamps stage to Physical
+        (void)ApplyRecordCheating(
+            ws, spouse, npcVictim, paramour, true,
+            AffairType::Lover, AffairStatus::Ongoing, AffairStage::Talking, 3.0f);
+        const auto npcOut = ApplySetAffairStage(ws, spouse, npcVictim, paramour, AffairStage::Talking, 4.0f);
+        MARAS_CHECK(npcOut.updated);
+        MARAS_CHECK_EQ(npcOut.appliedStage, AffairStage::Physical);
+        MARAS_CHECK_EQ(GetEffectiveAffairStage(ws.Snapshot(), spouse, npcVictim, paramour), AffairStage::Physical);
+    }
+
 }  // namespace MARAS::Tests

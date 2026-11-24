@@ -6,6 +6,7 @@
 #include "maras/domain/household/HouseholdRules.h"
 #include "maras/domain/household/SpouseAssetRules.h"
 #include "maras/domain/household/TravelRules.h"
+#include "maras/engine/ActorEngineUtils.h"
 #include "maras/engine/ActorService.h"
 #include "maras/engine/BedOwnershipReconciler.h"
 #include "maras/engine/ChildSpawnService.h"
@@ -155,6 +156,19 @@ namespace MARAS::App {
             return std::format("{:08X}", formID);
         }
 
+        [[nodiscard]] bool IsAdultChildBusyOrUnavailable(RE::FormID childID) {
+            auto* actor = SpatialWorldIndex::GetSingleton().GetActorFromFormId(childID);
+            if (!actor) {
+                actor = RE::TESForm::LookupByID<RE::Actor>(childID);
+            }
+            if (!actor) {
+                return false;
+            }
+            return actor->IsDead() || actor->IsDeleted() || actor->IsDisabled() ||
+                   actor->IsPlayerTeammate() || Utils::IsPlayerFollower(actor) ||
+                   actor->IsInCombat() || actor->GetCurrentScene() != nullptr;
+        }
+
         [[nodiscard]] std::vector<Domain::Household::TravelDestinationCandidate> BuildFamilyVisitDestinations(
             const State::WorldStateSnapshot& world,
             const State::SpatialActorSnapshot& spatial,
@@ -184,7 +198,7 @@ namespace MARAS::App {
                 cand.targetMarkerId = State::RefId{ markerID };
                 cand.targetLocationId = State::LocationId{ explicitLocID };
                 cand.isFamilyVisit = true;
-                cand.destinationName = label.empty() ? "Visiting Family Home" : std::move(label);
+                cand.destinationName = label.empty() ? "Family Home" : std::move(label);
 
                 if (auto* ref = RE::TESForm::LookupByID<RE::TESObjectREFR>(markerID)) {
                     if (auto* cell = ref->GetParentCell()) {
@@ -199,20 +213,36 @@ namespace MARAS::App {
                 out.push_back(std::move(cand));
             };
 
-            if (perceived->guardians.HasGuardian(State::ActorId::Player())) {
+            const auto visitableParents = view.GetVisitableFamilyParentIds(cid);
+            auto isSlotMarriedToPlayer = [&](State::ActorId slot) -> bool {
+                if (slot.IsNull() || slot.IsPlayer()) {
+                    return false;
+                }
+                const auto pairOpt = view.GetPerceivedPair(State::ActorId::Player(), slot);
+                return pairOpt.has_value() && pairOpt->status == Foundation::RelationshipStatus::Married;
+            };
+
+            const bool isPlayerRelated =
+                std::find(visitableParents.begin(), visitableParents.end(), State::ActorId::Player()) != visitableParents.end() ||
+                perceived->guardians.HasGuardian(State::ActorId::Player()) ||
+                perceived->bioMother.IsPlayer() ||
+                perceived->perceivedBioFather.IsPlayer() ||
+                isSlotMarriedToPlayer(perceived->guardians.slotA) ||
+                isSlotMarriedToPlayer(perceived->guardians.slotB);
+
+            if (isPlayerRelated) {
                 for (const auto& houseRec : world.household->AllHouses()) {
                     if (houseRec.markerId.IsNull()) {
                         continue;
                     }
                     std::string houseName = HouseholdEngineOps::GetHouseName(houseRec.houseId.raw());
-                    std::string label = houseName.empty()
-                                            ? "Visiting Family Home"
-                                            : ("Visiting " + std::move(houseName));
-                    appendMarker(houseRec.markerId.raw(), houseRec.houseId.raw(), std::move(label));
+                    appendMarker(
+                        houseRec.markerId.raw(),
+                        houseRec.houseId.raw(),
+                        houseName.empty() ? "Family Home" : std::move(houseName));
                 }
             }
 
-            const auto visitableParents = view.GetVisitableFamilyParentIds(cid);
             for (const State::ActorId parentActor : visitableParents) {
                 if (parentActor.IsNull() || parentActor.IsPlayer() || parentActor.IsUnknownFather()) {
                     continue;
@@ -224,22 +254,19 @@ namespace MARAS::App {
                     if (const auto* houseRec = world.household->FindHouse(parentHouseId);
                         houseRec && !houseRec->markerId.IsNull()) {
                         std::string houseName = HouseholdEngineOps::GetHouseName(parentHouseId.raw());
-                        std::string label = houseName.empty()
-                                                ? "Visiting Parents' Home"
-                                                : ("Visiting " + std::move(houseName));
-                        appendMarker(houseRec->markerId.raw(), parentHouseId.raw(), std::move(label));
+                        appendMarker(
+                            houseRec->markerId.raw(),
+                            parentHouseId.raw(),
+                            houseName.empty() ? "Parents' Home" : std::move(houseName));
                         continue;
                     }
                 }
 
                 const std::string pName = ResolveActorDisplayName(pid, world, spatial);
-                const std::string label = pName.empty()
-                                              ? "Visiting Parents' Home"
-                                              : ("Visiting " + pName);
                 const RE::FormID origMarker =
                     SpatialWorldIndex::GetSingleton().GetNpcOriginalHouseCenterMarker(pid);
                 if (origMarker != 0) {
-                    appendMarker(origMarker, 0, label);
+                    appendMarker(origMarker, 0, pName.empty() ? "Parents' Home" : pName);
                     continue;
                 }
 
@@ -249,7 +276,7 @@ namespace MARAS::App {
                     cand.targetMarkerId = sample->refId;
                     cand.targetLocationId = sample->currentLocationId;
                     cand.targetCellId = sample->parentCellId;
-                    cand.destinationName = label;
+                    cand.destinationName = pName.empty() ? "Parents" : pName;
                     cand.isFamilyVisit = true;
                     if (seenMarkers.insert(cand.targetMarkerId.raw()).second) {
                         out.push_back(std::move(cand));
@@ -292,7 +319,7 @@ namespace MARAS::App {
     // =========================================================================
 
     bool HouseholdUseCases::RegisterPlayerHouseCell(RE::FormID locationFormID, RE::FormID markerFormID) {
-        if (locationFormID == 0 || markerFormID == 0) {
+        if (locationFormID == 0) {
             MARAS_LOG_WARN(
                 "HouseholdUseCases::RegisterPlayerHouseCell: invalid args location={:08X}, marker={:08X}",
                 locationFormID, markerFormID);
@@ -300,9 +327,13 @@ namespace MARAS::App {
         }
 
         bool existedBefore = false;
+        std::vector<std::uint32_t> tenantsCopy;
         {
             const auto snap = State::WorldStore::GetSingleton().Snapshot();
-            existedBefore = snap->household->FindHouse(State::HouseId{ locationFormID }) != nullptr;
+            if (const auto* existing = snap->household->FindHouse(State::HouseId{ locationFormID })) {
+                existedBefore = true;
+                tenantsCopy = existing->tenantOrder;
+            }
         }
 
         bool registered = false;
@@ -312,9 +343,17 @@ namespace MARAS::App {
         });
 
         if (registered) {
-            if (!existedBefore) {
-                GlobalVarReconciler::GetSingleton().ReconcileGlobals();
+            if (markerFormID != 0 && !tenantsCopy.empty()) {
+                const auto postSnap = State::WorldStore::GetSingleton().Snapshot();
+                for (const RE::FormID tenantID : tenantsCopy) {
+                    if (IsChildTenantEntry(*postSnap, tenantID)) {
+                        LineageUseCases::GetSingleton().MoveChildToHouse(tenantID, locationFormID, /*moveActor=*/false);
+                    } else {
+                        HouseholdEngineOps::GetSingleton().UpdateSpouseHomeMarker(tenantID, locationFormID);
+                    }
+                }
             }
+            GlobalVarReconciler::GetSingleton().ReconcileGlobals();
             MARAS_LOG_INFO(
                 "HouseholdUseCases::RegisterPlayerHouseCell: {} house {:08X} ('{}') with marker {:08X}",
                 existedBefore ? "updated" : "registered",
@@ -505,6 +544,11 @@ namespace MARAS::App {
         if (tenantFormID == 0) {
             return;
         }
+        bool isChild = false;
+        {
+            const auto snap = State::WorldStore::GetSingleton().Snapshot();
+            isChild = IsChildTenantEntry(*snap, tenantFormID);
+        }
         bool updated = false;
         State::HouseId houseId{};
         State::WorldStore::GetSingleton().Modify([&](State::WorldState& ws) {
@@ -512,6 +556,9 @@ namespace MARAS::App {
                 ws, tenantFormID, stayAtHome, &houseId);
         });
         if (updated && !Foundation::IsSyntheticChildRawId(tenantFormID)) {
+            if (stayAtHome && !isChild && !houseId.IsNull()) {
+                HouseholdEngineOps::GetSingleton().UpdateSpouseHomeMarker(tenantFormID, houseId.raw());
+            }
             PackageReconciler::GetSingleton().ReconcileActor(tenantFormID);
         }
         MARAS_LOG_DEBUG(
@@ -544,21 +591,7 @@ namespace MARAS::App {
         if (!elig.eligible) {
             return false;
         }
-
-        if (snap->lineage) {
-            if (const auto* childRec = snap->lineage->FindChild(State::ChildId{ tenantFormID });
-                childRec && childRec->stage != Foundation::ChildStage::Adult) {
-                for (const State::ActorId gid : { childRec->guardians.slotA, childRec->guardians.slotB }) {
-                    if (!gid.IsNull() && snap->relationships &&
-                        snap->relationships->GetStatus(gid, State::ActorId::Player()) ==
-                            Foundation::RelationshipStatus::Married) {
-                        return false;
-                    }
-                }
-            }
-        }
-
-        if (HasLivingChildWithPlayer(*snap, State::ActorId{ tenantFormID })) {
+        if (!elig.isChild && HasLivingChildWithPlayer(*snap, State::ActorId{ tenantFormID })) {
             return false;
         }
         return true;
@@ -842,6 +875,9 @@ namespace MARAS::App {
                 if (rec.arrivedGameDay >= 0.0f) {
                     continue;
                 }
+                if (IsAdultChildBusyOrUnavailable(cid.raw())) {
+                    continue;
+                }
                 auto* actor = SpatialWorldIndex::GetSingleton().GetActorFromFormId(cid.raw());
                 if (!actor) {
                     actor = RE::TESForm::LookupByID<RE::Actor>(cid.raw());
@@ -884,10 +920,14 @@ namespace MARAS::App {
                 childID);
         }
         for (const State::ChildId cid : outcome.childrenNeedingRotation) {
-            AssignOrUpdateDestination(cid.raw(), true);
+            if (!IsAdultChildBusyOrUnavailable(cid.raw())) {
+                AssignOrUpdateDestination(cid.raw(), true);
+            }
         }
         for (const State::ChildId cid : outcome.unassignedEligibleAdults) {
-            AssignOrUpdateDestination(cid.raw(), false);
+            if (!IsAdultChildBusyOrUnavailable(cid.raw())) {
+                AssignOrUpdateDestination(cid.raw(), false);
+            }
         }
     }
 
@@ -943,10 +983,22 @@ namespace MARAS::App {
         if (childID == 0) {
             return {};
         }
-        std::shared_lock lock(travelMutex_);
         const auto snap = State::WorldStore::GetSingleton().Snapshot();
         const auto* rec = snap->household->FindAdultChildTravel(State::ChildId{ childID });
-        return rec ? rec->destinationName : std::string{};
+        if (!rec || rec->destinationName.empty()) {
+            return "Traveling Skyrim";
+        }
+        std::string_view cleanDest = rec->destinationName;
+        if (cleanDest.starts_with("Visiting ")) {
+            cleanDest.remove_prefix(9);
+        }
+        if (rec->arrivedGameDay < 0.0f) {
+            return "Traveling to " + std::string(cleanDest);
+        }
+        if (rec->isFamilyVisit) {
+            return "Visiting " + std::string(cleanDest);
+        }
+        return "Staying at " + std::string(cleanDest);
     }
 
     // =========================================================================
@@ -1064,14 +1116,104 @@ namespace MARAS::App {
     }
 
     nlohmann::json HouseholdUseCases::DumpTravelJson(const Projection::PerspectiveView& view) const {
-        std::shared_lock lock(travelMutex_);
         const auto world = State::WorldStore::GetSingleton().Snapshot();
         const auto innDests = SpatialWorldIndex::GetSingleton().GetInnDestinations();
+
+        auto isFamilyDestinationVisible = [&](State::ChildId childKey,
+                                              const State::AdultChildTravelRecord& rec) -> bool {
+            if (!rec.isFamilyVisit || view.IsOmniscient() || view.CanViewerKnowTrueBioFather(childKey)) {
+                return true;
+            }
+            const auto perceivedOpt = view.GetPerceivedChild(childKey);
+            if (!perceivedOpt.has_value()) {
+                return false;
+            }
+            const auto& perceived = *perceivedOpt;
+            const auto visitableParents = view.GetVisitableFamilyParentIds(childKey);
+
+            auto isSlotMarriedToPlayer = [&](State::ActorId slot) -> bool {
+                if (slot.IsNull() || slot.IsPlayer()) {
+                    return false;
+                }
+                const auto pairOpt = view.GetPerceivedPair(State::ActorId::Player(), slot);
+                return pairOpt.has_value() && pairOpt->status == Foundation::RelationshipStatus::Married;
+            };
+
+            const bool isPlayerRelated =
+                std::find(visitableParents.begin(), visitableParents.end(), State::ActorId::Player()) != visitableParents.end() ||
+                perceived.guardians.HasGuardian(State::ActorId::Player()) ||
+                perceived.bioMother.IsPlayer() ||
+                perceived.perceivedBioFather.IsPlayer() ||
+                isSlotMarriedToPlayer(perceived.guardians.slotA) ||
+                isSlotMarriedToPlayer(perceived.guardians.slotB);
+
+            if (isPlayerRelated) {
+                for (const auto& houseRec : view.Household().AllHouses()) {
+                    if ((!rec.targetMarkerId.IsNull() && houseRec.markerId == rec.targetMarkerId) ||
+                        (!rec.targetLocationId.IsNull() && houseRec.houseId.raw() == rec.targetLocationId.raw())) {
+                        return true;
+                    }
+                }
+            }
+
+            std::vector<State::ActorId> visibleParents = visitableParents;
+            auto appendVisible = [&](State::ActorId pid) {
+                if (pid.IsNull() || pid.IsPlayer() || pid.IsUnknownFather()) {
+                    return;
+                }
+                if (std::find(visibleParents.begin(), visibleParents.end(), pid) == visibleParents.end()) {
+                    visibleParents.push_back(pid);
+                }
+            };
+            appendVisible(perceived.guardians.slotA);
+            appendVisible(perceived.guardians.slotB);
+            appendVisible(perceived.bioMother);
+            appendVisible(perceived.perceivedBioFather);
+            if (!perceived.hideSecretFromViewer) {
+                appendVisible(perceived.presumedFather);
+            }
+
+            for (const State::ActorId pId : visibleParents) {
+                if (pId.IsNull() || pId.IsPlayer() || pId.IsUnknownFather()) {
+                    continue;
+                }
+                if (rec.targetMarkerId.raw() == pId.raw()) {
+                    return true;
+                }
+                const State::HouseId tenantHouseId = view.Household().GetTenantHouse(pId.raw());
+                if (!tenantHouseId.IsNull()) {
+                    if (rec.targetLocationId.raw() == tenantHouseId.raw()) {
+                        return true;
+                    }
+                    if (const auto* houseRec = view.Household().FindHouse(tenantHouseId);
+                        houseRec && !houseRec->markerId.IsNull() && houseRec->markerId == rec.targetMarkerId) {
+                        return true;
+                    }
+                }
+                const RE::FormID origMarker =
+                    SpatialWorldIndex::GetSingleton().GetNpcOriginalHouseCenterMarker(pId.raw());
+                if (origMarker != 0 && origMarker == rec.targetMarkerId.raw()) {
+                    return true;
+                }
+            }
+            return false;
+        };
 
         nlohmann::json root = nlohmann::json::object();
         nlohmann::json entries = nlohmann::json::array();
 
         for (const auto& [cid, rec] : view.Household().AllAdultChildTravel()) {
+            if (!view.IsChildVisible(cid)) {
+                continue;
+            }
+
+            const bool destVisible = isFamilyDestinationVisible(cid, rec);
+            const RE::FormID outMarkerID = destVisible ? rec.targetMarkerId.raw() : 0;
+            const RE::FormID outLocID = destVisible ? rec.targetLocationId.raw() : 0;
+            const RE::FormID outCellID = destVisible ? rec.targetCellId.raw() : 0;
+            const std::string outDestName = destVisible ? rec.destinationName : std::string("Traveling");
+            const bool outIsFamilyVisit = destVisible ? rec.isFamilyVisit : false;
+
             const auto perceived = view.GetPerceivedChild(cid);
             std::string displayName = perceived ? perceived->name : std::string{};
             if (displayName.empty()) {
@@ -1082,14 +1224,14 @@ namespace MARAS::App {
             ej["childID"] = cid.raw();
             ej["childHex"] = std::format("{:08X}", cid.raw());
             ej["name"] = std::move(displayName);
-            ej["targetMarkerID"] = rec.targetMarkerId.raw();
-            ej["targetLocationID"] = rec.targetLocationId.raw();
-            ej["targetCellID"] = rec.targetCellId.raw();
-            ej["destinationName"] = rec.destinationName;
+            ej["targetMarkerID"] = outMarkerID;
+            ej["targetLocationID"] = outLocID;
+            ej["targetCellID"] = outCellID;
+            ej["destinationName"] = outDestName;
             ej["assignedGameDay"] = rec.assignedGameDay;
             ej["arrivedGameDay"] = rec.arrivedGameDay;
             ej["stayDurationDays"] = rec.stayDurationDays;
-            ej["isFamilyVisit"] = rec.isFamilyVisit;
+            ej["isFamilyVisit"] = outIsFamilyVisit;
             entries.push_back(std::move(ej));
         }
 

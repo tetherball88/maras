@@ -5,6 +5,8 @@
 
 #include <atomic>
 #include <cstdint>
+#include <memory>
+#include <mutex>
 #include <string>
 #include <vector>
 
@@ -62,11 +64,12 @@ namespace MARAS {
             std::vector<CachedEntryRef> entries;
         };
 
-        void RebuildCacheIfNeeded();
+        [[nodiscard]] std::shared_ptr<const std::vector<PerkGroup>> GetOrRebuildCache();
         void ReconcilePlayerBuffsOnMainThread();
 
+        mutable std::mutex cacheMutex_;
         bool cacheValid_{ false };
-        std::vector<PerkGroup> perkGroups_;
+        std::shared_ptr<const std::vector<PerkGroup>> perkGroups_;
         std::atomic<bool> pendingReconcile_{ false };
         std::atomic<bool> forceRefreshOnLoad_{ true };
     };

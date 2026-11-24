@@ -55,9 +55,13 @@ export const App: React.FC = () => {
       const scanCode = convertKeyboardEventToScanCode(e)
       if (scanCode !== settings.toggleUIKey) return
 
-      if (settings.toggleUIModCtrl && !e.ctrlKey) return
-      if (settings.toggleUIModShift && !e.shiftKey) return
-      if (settings.toggleUIModAlt && !e.altKey) return
+      if (
+        e.ctrlKey !== Boolean(settings.toggleUIModCtrl) ||
+        e.shiftKey !== Boolean(settings.toggleUIModShift) ||
+        e.altKey !== Boolean(settings.toggleUIModAlt)
+      ) {
+        return
+      }
 
       e.preventDefault()
       closeUi()

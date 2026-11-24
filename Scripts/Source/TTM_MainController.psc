@@ -523,9 +523,8 @@ Event OnRelationshipChangedFull(String EventName, String jsonPayload, Float stat
                         MARAS.DirectNarration("Time passed... " + TTM_Utils.GetActorName(player) + " and " + TTM_Utils.GetActorName(nonPlayerPartner) + " got married!", nonPlayerPartner, player)
                     endif
                 else
-                    if(TTM_ServiceMarriageQuest.StartEngagement(nonPlayerPartner))
-                        MARAS.NotifyEngagementCeremonyStarted(nonPlayerPartner)
-                    endif
+                    TTM_ServiceMarriageQuest.StartEngagement(nonPlayerPartner)
+                    MARAS.NotifyEngagementCeremonyStarted(nonPlayerPartner)
                 endif
             elseif(status == "married")
                 TTM_ServiceMarriageQuest.SkipWedding(nonPlayerPartner)
@@ -554,11 +553,13 @@ Event OnActorDied(string eventName, string strArg, float isPlayerKillerNum, Form
     Actor player = TTM_Data.GetPlayer()
     bool spouse = MARAS.IsNPCStatus(victim, "married") || MARAS.WasMarriedTo(victim, player)
     bool engaged = MARAS.IsNPCStatus(victim, "engaged") || MARAS.WasEngagedTo(victim, player)
-    if ((spouse || engaged) && isPlayerKiller)
-        MARAS.SetPlayerKiller(true)
-        TTM_ServiceSpouseAssets.StopShareHouseWithPlayer(victim, "deceased")
+    if (spouse || engaged)
+        if (isPlayerKiller)
+            MARAS.SetPlayerKiller(true)
+            TTM_ServiceSpouseAssets.StopShareHouseWithPlayer(victim, "deceased")
+        endif
+        TTM_ServiceMarriageQuest.ResetMarriageQuests(victim)
     endif
-    TTM_ServiceMarriageQuest.ResetMarriageQuests(victim)
 EndEvent
 
 Event OnSpouseAffectionChanged(String EventName, String level, Float affectionDiff, Form spouse)

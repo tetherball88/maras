@@ -3,6 +3,7 @@
 #include "maras/app/ModalTypes.h"
 #include "maras/foundation/DomainEnums.h"
 
+#include <atomic>
 #include <chrono>
 #include <cstdint>
 #include <mutex>
@@ -68,10 +69,17 @@ namespace MARAS::Bridge::SkyrimNet {
             MatchmakingApplyScope& operator=(const MatchmakingApplyScope&) = delete;
         };
 
-        static void PushSuppress() noexcept { ++s_suppressDepth_; }
+        static void PushSuppress() noexcept {
+            s_suppressDepth_.fetch_add(1, std::memory_order_acq_rel);
+        }
         static void PopSuppress() noexcept {
-            if (s_suppressDepth_ > 0) {
-                --s_suppressDepth_;
+            int expected = s_suppressDepth_.load(std::memory_order_acquire);
+            while (expected > 0 &&
+                   !s_suppressDepth_.compare_exchange_weak(
+                       expected,
+                       expected - 1,
+                       std::memory_order_acq_rel,
+                       std::memory_order_acquire)) {
             }
         }
         static void PushMatchmakingApply() noexcept { ++s_matchmakingApplyDepth_; }
@@ -81,7 +89,9 @@ namespace MARAS::Bridge::SkyrimNet {
             }
         }
 
-        [[nodiscard]] static bool IsSuppressed() noexcept { return s_suppressDepth_ > 0; }
+        [[nodiscard]] static bool IsSuppressed() noexcept {
+            return s_suppressDepth_.load(std::memory_order_acquire) > 0;
+        }
         [[nodiscard]] static bool IsMatchmakingApplyActive() noexcept { return s_matchmakingApplyDepth_ > 0; }
 
         void RecordEvent(MemoryEvent event);
@@ -155,7 +165,7 @@ namespace MARAS::Bridge::SkyrimNet {
         std::vector<MemoryEpisode> activeEpisodes_;
         std::uint64_t nextEpisodeID_ = 1;
 
-        static inline thread_local int s_suppressDepth_ = 0;
+        static inline std::atomic<int> s_suppressDepth_{ 0 };
         static inline thread_local int s_matchmakingApplyDepth_ = 0;
     };
 

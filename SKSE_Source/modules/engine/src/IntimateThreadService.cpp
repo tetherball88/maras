@@ -72,52 +72,12 @@ namespace MARAS {
             if (cheaterID == 0 || victimID == 0 || affairPartnerID == 0) {
                 return;
             }
-
-            auto* cal = RE::Calendar::GetSingleton();
-            const float currentFloatDay = cal ? cal->GetDaysPassed() : 0.0f;
-
-            bool recorded = false;
-            bool intentUpgraded = false;
-            State::WorldStore::GetSingleton().Modify([&](State::WorldState& ws) {
-                const Foundation::ActorId cheater{ cheaterID };
-                const auto intentBefore = ws.relationships->GetPendingIntent(cheater);
-
-                recorded = ws.RecordCheatingIncident(
-                    cheater,
-                    Foundation::ActorId{ victimID },
-                    Foundation::ActorId{ affairPartnerID },
-                    isSecret,
-                    State::AffairType::Casual,
-                    State::AffairStatus::Ongoing,
-                    State::AffairStage::Physical,
-                    currentFloatDay);
-
-                if (recorded) {
-                    const auto intentAfter = ws.relationships->GetPendingIntent(cheater);
-                    if (intentBefore.type == State::PartnerIntentType::ConfessTalking &&
-                        intentAfter.type == State::PartnerIntentType::ConfessPhysical) {
-                        intentUpgraded = true;
-                    }
-                }
-            });
-
-            if (!recorded) {
-                return;
-            }
-
-            if (intentUpgraded && cheaterID != kPlayerFormID) {
-                std::string intentStr(Foundation::PartnerIntentTypeToString(Foundation::PartnerIntentType::ConfessPhysical));
-                RE::Actor* partnerActor = SpatialWorldIndex::GetSingleton().GetActorFromFormId(cheaterID);
-                const RE::FormID senderID = partnerActor ? partnerActor->GetFormID() : 0;
-                EmitModCallbackEvent(
-                    "maras_partner_intent_changed",
-                    std::move(intentStr),
-                    static_cast<float>(static_cast<std::uint8_t>(Foundation::PartnerIntentType::ConfessPhysical)),
-                    senderID);
-            }
-
-            if (victimID == kPlayerFormID) {
-                FactionReconciler::GetSingleton().ReconcileActor(cheaterID);
+            if (auto* hooks = Engine::GetEngineEventHooks()) {
+                (void)hooks->OnRecordIntimateCheating(cheaterID, victimID, affairPartnerID, isSecret);
+            } else {
+                MARAS_LOG_WARN(
+                    "RecordCheatingIncidentDirect: EngineEventHooks unavailable for cheater={:08X}, victim={:08X}, partner={:08X}",
+                    cheaterID, victimID, affairPartnerID);
             }
         }
 
@@ -518,9 +478,10 @@ namespace MARAS {
                                         QueueHUDMessage(std::move(msg));
                                     }
 
-                                    if (victimActor && cheaterActor && partnerActor) {
+                                    if (victimActor && cheaterActor) {
                                         SendCheatingCaughtEvent(victimActor, cheaterActor, partnerActor,
-                                                                key.framework, key.threadID, /*isWalkIn=*/false);
+                                                                key.framework, key.threadID, /*isWalkIn=*/false,
+                                                                partnerID);
                                     }
                                 } else {
                                     RecordCheatingIncidentDirect(cheaterID, victimID, partnerID, /*isSecret=*/true);
@@ -896,7 +857,7 @@ namespace MARAS {
 
                         // Notify Layer 4 + emit maras_cheating_caught event with victim as sender
                         SendCheatingCaughtEvent(victimActor, cheaterActor, partnerActor, thread.framework,
-                                                thread.threadID, /*isWalkIn=*/true);
+                                                thread.threadID, /*isWalkIn=*/true, affairPartnerID);
                     }
                 }
             }
@@ -987,14 +948,15 @@ namespace MARAS {
                                                         RE::Actor* partnerActor,
                                                         const std::string& framework,
                                                         std::int32_t threadID,
-                                                        bool isWalkIn) {
+                                                        bool isWalkIn,
+                                                        RE::FormID fallbackPartnerID) {
         if (!victimActor) {
             return;
         }
 
         const RE::FormID victimID = victimActor->GetFormID();
         const RE::FormID cheaterID = cheaterActor ? cheaterActor->GetFormID() : 0;
-        const RE::FormID partnerID = partnerActor ? partnerActor->GetFormID() : 0;
+        const RE::FormID partnerID = partnerActor ? partnerActor->GetFormID() : fallbackPartnerID;
 
         nlohmann::json payload;
         payload["victim"] = fmt::format("0x{:08X}", victimID);

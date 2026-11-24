@@ -298,14 +298,15 @@ namespace MARAS::App {
         GetModalGateway().ShowModal(
             std::move(req),
             [expectedEpoch, onRetry = std::move(onRetry), onIgnore = std::move(onIgnore)](const ModalResponse& resp) mutable {
-                if (resp.aborted || !IsSessionEpochCurrent(expectedEpoch)) {
+                if (!IsSessionEpochCurrent(expectedEpoch)) {
                     return;
                 }
+                const bool isRetry = !resp.aborted && (resp.buttonIndex == 0 || resp.buttonId == "retry");
                 std::lock_guard lock(GetPapyrusMutex());
                 if (!IsSessionEpochCurrent(expectedEpoch)) {
                     return;
                 }
-                if (resp.buttonIndex == 0 || resp.buttonId == "retry") {
+                if (isRetry) {
                     if (onRetry) onRetry();
                 } else {
                     if (onIgnore) onIgnore();

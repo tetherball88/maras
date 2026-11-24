@@ -36,6 +36,7 @@ namespace MARAS::Bridge::Ui {
         void RefreshDashboardOnOpen();
         void SendOverviewData();
         void SendSettingsData();
+        void SendSettingsDataOnMainThreadSafe();
         void SendLocaleData();
         void SendLocaleDataOnMainThreadSafe();
         void SendNPCList();

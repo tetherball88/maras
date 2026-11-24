@@ -65,6 +65,16 @@ namespace MARAS::Domain::Lineage {
         bool initializePartnerSecretIfDifferent{ false };
     };
 
+    struct SetPresumedFatherInput {
+        ChildId childId{};
+        ActorId fatherId{};
+        float currentGameDay{ 0.0f };
+        std::string bioFatherName{};
+        State::FormRawId bioFatherRaceId{};
+        std::string presumedFatherRaceEditorId{};
+        std::string bioFatherRaceEditorId{};
+    };
+
     [[nodiscard]] bool IsChildBlockedFromAdoption(
         RefId childRefId,
         BaseId childBaseId,
@@ -127,6 +137,10 @@ namespace MARAS::Domain::Lineage {
     bool ApplySetBioFather(
         State::WorldState& ws,
         const SetBioFatherInput& input);
+
+    bool ApplySetPresumedFather(
+        State::WorldState& ws,
+        const SetPresumedFatherInput& input);
 
     ChildOrderOutcome ApplyOrderIssue(
         State::WorldState& ws,

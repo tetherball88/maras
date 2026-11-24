@@ -1,5 +1,25 @@
 # Changelog
 
+## 2.6.3.alpha - 2026-11-24
+
+### Fixed
+- **Engagement & Temple of Mara Wedding Reliability**: Fixed engaging NPCs with a low vanilla relationship rank (such as NPCs promoted directly from the Dashboard) accidentally triggering Skyrim's wedding-breakup quest instead of advancing to the Temple of Mara ceremony, and eliminated a spurious marriage-quest warning when non-spouse NPCs die.
+- **NPC Matchmaking & Partner Agency (Automatic & Manual)**:
+  - Fixed automatic scheduled matchmaking, manual per-NPC **Suggest Matches**, and **Global Matchmaking** failing to trigger or render prompts cleanly in SkyrimNet, and fixed manual/global suggestions auto-applying instead of opening the review preview when confirmation is enabled.
+  - Fixed Partner Agency evaluations (SkyrimNet Decisions & Chat LLM) properly respecting the chosen candidate, forming full side-lover relationships, keeping undiscovered player affairs hidden from unaware partners, honoring **Secrets** mode in review modals, and gating home-arrival events to the partner's actual home location with valid side lovers.
+  - Fixed background banter cooldowns being consumed prematurely at midnight before location-change scenes could run.
+- **Relationships, Infidelity, Open Couples & Hierarchy**:
+  - Fixed walk-in / caught-in-the-act cheating encounters properly marking the affair as discovered so confrontation dialogue, **Secrets** mode visibility, and faction states stay in sync.
+  - Fixed closing an open relationship properly running full cleanup on ended side-lover relationships and resetting exclusive-partner status cleanly, and prevented double affection penalties when re-opening an already-open pair.
+  - Fixed spouse hierarchy promotions (rank-up notifications, affection updates, and faction sync) after divorce, bereavement, or unregistering a spouse, and prevented invalid or dead actors from corrupting relationship records.
+- **Children, Fertility & Household Management**:
+  - Restored daily household child welcome-home greetings (`Forcegreet`) and excluded physical **Beeing Female NG** infants from young-child greeting rolls.
+  - Fixed removing sole-player, divorced-parent, or widowed-parent children from a player house, restored family-unit relocation and training-academy metadata/stage guards, fixed mixed live/stillbirth **Beeing Female NG** delivery handling, and fixed a duplicate child-custody event when a tracked parent dies.
+  - Fixed **Fertility Mode Reloaded** / **Beeing Female NG** child naming pop-ups freezing or blocking subsequent births if cancelled or aborted.
+- **Magelight UI, Pop-Ups, Hotkeys & Save-Switching Stability**:
+  - Fixed pop-up dialogs and latent actions hanging if Magelight UI is unavailable, reloaded, or loses UI focus, and eliminated focus/pause thrashing across queued back-to-back modals.
+  - Fixed Dashboard loading spinners locking out when closed mid-fetch, prevented debounced Dashboard edits from leaking across save reloads, and restored custom `MARAS.ini` hotkey scancodes, left/right modifiers, disabling the hotkey with `0` / `none`, and legacy Papyrus setting keys.
+
 ## 2.6.2.alpha - 2026-11-20
 
 ### Fixed

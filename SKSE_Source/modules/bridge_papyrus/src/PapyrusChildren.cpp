@@ -197,15 +197,16 @@ namespace MARAS::PapyrusInterface {
     // Player Children Household & Companions
     // ========================================
 
-    bool AssignChildToHouse(RE::StaticFunctionTag*, RE::Actor* child, RE::BGSLocation* houseLoc, bool moveChild) {
+    bool AssignChildToHouse(RE::StaticFunctionTag*, RE::Actor* child, RE::BGSLocation* houseLoc, bool /*moveChild*/) {
         if (!child || !houseLoc) {
             MARAS_LOG_WARN("AssignChildToHouse: null child or houseLoc provided");
             return false;
         }
 
         std::lock_guard<MARAS::PapyrusDomainMutex> lock(GetPapyrusMutex());
-        return App::LineageUseCases::GetSingleton().MoveChildToHouse(
-            child->GetFormID(), houseLoc->GetFormID(), moveChild);
+        const auto res = App::HouseholdUseCases::GetSingleton().RelocateFamilyUnit(
+            child->GetFormID(), houseLoc->GetFormID(), /*moveParents=*/true);
+        return !res.empty();
     }
 
     bool IssueChildOrder(RE::StaticFunctionTag*, RE::Actor* child, float orderValue, float durationHours) {
@@ -227,12 +228,13 @@ namespace MARAS::PapyrusInterface {
     }
 
     bool AssignChildPet(RE::StaticFunctionTag*, RE::Actor* child, RE::Actor* pet) {
-        if (!child || !pet) {
+        if (!child) {
             return false;
         }
 
+        const RE::FormID petID = pet ? pet->GetFormID() : 0;
         std::lock_guard<MARAS::PapyrusDomainMutex> lock(GetPapyrusMutex());
-        return App::LineageUseCases::GetSingleton().AssignPet(child->GetFormID(), pet->GetFormID());
+        return App::LineageUseCases::GetSingleton().AssignPet(child->GetFormID(), petID);
     }
 
     RE::Actor* GetChildPet(RE::StaticFunctionTag*, RE::Actor* child) {
@@ -352,12 +354,13 @@ namespace MARAS::PapyrusInterface {
     }
 
     bool AssignChildCritter(RE::StaticFunctionTag*, RE::Actor* child, RE::Actor* critter) {
-        if (!child || !critter) {
+        if (!child) {
             return false;
         }
 
+        const RE::FormID critterID = critter ? critter->GetFormID() : 0;
         std::lock_guard<MARAS::PapyrusDomainMutex> lock(GetPapyrusMutex());
-        return App::LineageUseCases::GetSingleton().AssignCritter(child->GetFormID(), critter->GetFormID());
+        return App::LineageUseCases::GetSingleton().AssignCritter(child->GetFormID(), critterID);
     }
 
     RE::Actor* GetChildCritter(RE::StaticFunctionTag*, RE::Actor* child) {
@@ -1044,13 +1047,11 @@ namespace MARAS::PapyrusInterface {
                                        RE::Actor* parent1,
                                        RE::Actor* parent2,
                                        std::string childName) {
-        if (!parent1) {
-            return 0;
-        }
-
+        const RE::FormID p1 = parent1 ? parent1->GetFormID() : 0;
+        const RE::FormID p2 = parent2 ? parent2->GetFormID() : 0;
         std::lock_guard<MARAS::PapyrusDomainMutex> lock(GetPapyrusMutex());
         return static_cast<int32_t>(App::PaternityWorkflowCoordinator::GetSingleton().FindChildPaternitySecret(
-            parent1->GetFormID(), parent2 ? parent2->GetFormID() : 0, childName));
+            p1, p2, childName));
     }
 
     RE::Actor* GetPrimaryPartner(RE::StaticFunctionTag*, RE::Actor* akActor) {

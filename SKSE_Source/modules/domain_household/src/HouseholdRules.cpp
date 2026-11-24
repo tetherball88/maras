@@ -66,7 +66,14 @@ namespace MARAS::Domain::Household {
         if (houseId.IsNull()) {
             return false;
         }
-        return ws.household.Write().RegisterHouse(houseId, markerId, initialMoveDone);
+        auto& hh = ws.household.Write();
+        if (auto* existing = hh.FindHouseMutable(houseId)) {
+            if (!markerId.IsNull()) {
+                existing->markerId = markerId;
+            }
+            return true;
+        }
+        return hh.RegisterHouse(houseId, markerId, initialMoveDone);
     }
 
     bool ApplyRegisterTenant(
@@ -116,7 +123,18 @@ namespace MARAS::Domain::Household {
             if (const auto* childRec = snap.lineage->FindChild(ChildId{ tenantRawId });
                 childRec && childRec->stage != Foundation::ChildStage::Adult) {
                 out.isChild = true;
-                out.eligible = !childRec->guardians.HasGuardian(ActorId::Player());
+                bool hasMarriedCoGuardian = false;
+                if (childRec->guardians.HasGuardian(ActorId::Player())) {
+                    const ActorId otherGuardian = childRec->guardians.OtherGuardian(ActorId::Player());
+                    if (!otherGuardian.IsNull() &&
+                        !IsDeceased(snap, otherGuardian) &&
+                        snap.relationships &&
+                        snap.relationships->GetStatus(ActorId::Player(), otherGuardian) ==
+                            Foundation::RelationshipStatus::Married) {
+                        hasMarriedCoGuardian = true;
+                    }
+                }
+                out.eligible = !hasMarriedCoGuardian;
                 return out;
             }
         }

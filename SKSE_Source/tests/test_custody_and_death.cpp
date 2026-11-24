@@ -720,4 +720,61 @@ namespace MARAS::Tests {
         }
     }
 
+    MARAS_TEST(CustodyAndDeath, HierarchyShiftDeltasOnDivorceDeathAndUnregister) {
+        DefaultActorMetadataProvider meta{};
+        Foundation::DeterministicRng rng(0x77112233u);
+        const ActorId sp1{ 0x00084001u };
+        const ActorId sp2{ 0x00084002u };
+        const ActorId sp3{ 0x00084003u };
+        const ActorId sp4{ 0x00084004u };
+
+        auto makeFourSpouseWorld = [&]() {
+            WorldState ws{};
+            ws.settings.Write().enablePlayerPolygamy = true;
+            float day = 1.0f;
+            for (const ActorId sp : { sp1, sp2, sp3, sp4 }) {
+                (void)ws.PromoteToMarried(ActorId::Player(), sp, day, ActorId::Player(), meta);
+                day += 1.0f;
+            }
+            return ws;
+        };
+
+        // 1. Divorce sp1 (rank 0) -> sp2 (1->0), sp3 (2->1), sp4 (4->2) all shifted & dirty
+        {
+            auto ws = makeFourSpouseWorld();
+            const auto mut = ws.PromoteToDivorced(ActorId::Player(), sp1, 10.0f, ActorId::Player(), meta, &rng);
+            MARAS_CHECK(mut.hierarchyChanged);
+            MARAS_REQUIRE_EQ(mut.hierarchyShifts.size(), std::size_t{ 3 });
+            MARAS_CHECK_EQ(mut.hierarchyShifts[0], (HierarchyShiftDelta{ sp2, 1, 0 }));
+            MARAS_CHECK_EQ(mut.hierarchyShifts[1], (HierarchyShiftDelta{ sp3, 2, 1 }));
+            MARAS_CHECK_EQ(mut.hierarchyShifts[2], (HierarchyShiftDelta{ sp4, 4, 2 }));
+            MARAS_CHECK(std::find(mut.dirtyActors.begin(), mut.dirtyActors.end(), sp2) != mut.dirtyActors.end());
+            MARAS_CHECK(std::find(mut.dirtyActors.begin(), mut.dirtyActors.end(), sp4) != mut.dirtyActors.end());
+        }
+
+        // 2. Death of sp1 (with sp4 already deceased) -> promotes sp2 & sp3, skips deceased sp4
+        {
+            auto ws = makeFourSpouseWorld();
+            ws.deceased.Write().UpsertRecord(DeceasedActorRecord{ .refId = sp4.AsRefId(), .name = "DeadSp4" });
+            const auto mut = ws.RecordActorDeath(sp1, 12.0f, false, ActorId{}, meta);
+            MARAS_CHECK(mut.hierarchyChanged);
+            MARAS_REQUIRE_EQ(mut.hierarchyShifts.size(), std::size_t{ 2 });
+            MARAS_CHECK_EQ(mut.hierarchyShifts[0], (HierarchyShiftDelta{ sp2, 1, 0 }));
+            MARAS_CHECK_EQ(mut.hierarchyShifts[1], (HierarchyShiftDelta{ sp3, 2, 1 }));
+            MARAS_CHECK(ws.hierarchy->GetSpouseAtSlot(2).IsNull());
+        }
+
+        // 3. Unregister sp2 (rank 1) -> sp3 (2->1) and sp4 (4->2) shift up
+        {
+            auto ws = makeFourSpouseWorld();
+            const auto mut = ws.UnregisterActor(sp2);
+            MARAS_CHECK(mut.hierarchyChanged);
+            MARAS_REQUIRE_EQ(mut.hierarchyShifts.size(), std::size_t{ 2 });
+            MARAS_CHECK_EQ(mut.hierarchyShifts[0], (HierarchyShiftDelta{ sp3, 2, 1 }));
+            MARAS_CHECK_EQ(mut.hierarchyShifts[1], (HierarchyShiftDelta{ sp4, 4, 2 }));
+            MARAS_CHECK(std::find(mut.dirtyActors.begin(), mut.dirtyActors.end(), sp3) != mut.dirtyActors.end());
+            MARAS_CHECK(std::find(mut.dirtyActors.begin(), mut.dirtyActors.end(), sp4) != mut.dirtyActors.end());
+        }
+    }
+
 }  // namespace MARAS::Tests

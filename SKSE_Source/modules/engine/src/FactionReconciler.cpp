@@ -485,7 +485,7 @@ namespace MARAS {
         }
 
         auto& fc = FormCache::GetSingleton();
-        const std::array<RE::TESFaction*, 14> marasFactions{{
+        const std::array<RE::TESFaction*, 15> marasFactions{{
             fc.GetTrackedFaction(),
             fc.GetSpouseSocialClassFaction(),
             fc.GetSpouseSkillTypeFaction(),
@@ -497,6 +497,7 @@ namespace MARAS {
             fc.GetSpouseOpenRelationshipFaction(),
             fc.GetCanFormNonCheatingMainFaction(),
             fc.GetSpouseHousedFaction(),
+            fc.GetSpouseSharedHouseFaction(),
             fc.GetPlayerFamilyBlockedFaction(),
             fc.GetPlayerChildBothParentsFaction(),
             fc.GetPlayerChildPetFaction()

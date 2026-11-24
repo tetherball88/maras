@@ -64,7 +64,10 @@ namespace MARAS::App {
             const std::string& name = "",
             RE::FormID bioFatherID = 0);
 
-        bool RemoveUnbornChild(RE::FormID motherID, RE::FormID bioFatherID = 0);
+        bool RemoveUnbornChild(
+            RE::FormID motherID,
+            RE::FormID bioFatherID = 0,
+            bool preserveDeliveryBatch = false);
 
         RE::FormID RegisterFertilityChild(
             RE::FormID syntheticChildID,

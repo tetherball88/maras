@@ -482,6 +482,45 @@ namespace MARAS::Domain::Lineage {
         return true;
     }
 
+    bool ApplySetPresumedFather(
+        State::WorldState& ws,
+        const SetPresumedFatherInput& input) {
+        auto* rec = ws.lineage.Write().FindChildMutable(input.childId);
+        if (!rec) {
+            return false;
+        }
+        auto& pSec = rec->paternitySecret;
+        const bool sameAsMother = !rec->bioMother.IsNull() && input.fatherId == rec->bioMother;
+        const bool sameAsBioFather =
+            !rec->bioFather.IsNull() && !rec->bioFather.IsUnknownFather() && input.fatherId == rec->bioFather;
+
+        if (input.fatherId.IsNull() || sameAsMother || sameAsBioFather) {
+            rec->presumedFather = ActorId{};
+            pSec = State::PaternitySecretState{};
+            return true;
+        }
+
+        rec->presumedFather = input.fatherId;
+        const bool hasRealBioFather = !rec->bioFather.IsNull() && !rec->bioFather.IsUnknownFather();
+        if (!pSec.isSecret && !pSec.discovered) {
+            pSec.isSecret = true;
+            pSec.isSecretForPartner = true;
+            pSec.isSecretForBioFather = hasRealBioFather;
+            pSec.isPregnancySecretForPartner = (rec->stage == Foundation::ChildStage::Unborn);
+            pSec.lastCheckTimestamp = input.currentGameDay;
+        }
+        if (hasRealBioFather) {
+            pSec.bioFatherName = input.bioFatherName;
+            pSec.bioFatherRaceId = input.bioFatherRaceId;
+            pSec.hasPhenotypeMismatch = HasPhenotypeMismatch(
+                input.presumedFatherRaceEditorId,
+                input.bioFatherRaceEditorId);
+        } else {
+            pSec.hasPhenotypeMismatch = false;
+        }
+        return true;
+    }
+
     ChildOrderOutcome ApplyOrderIssue(
         State::WorldState& ws,
         ChildId childId,
@@ -567,11 +606,19 @@ namespace MARAS::Domain::Lineage {
             return result;
         }
         for (const auto& [cid, st] : snap.household->AllChildStates()) {
+            if (onlyPhysicalActors && cid.IsSynthetic()) {
+                continue;
+            }
+            if (snap.lineage) {
+                if (const auto* rec = snap.lineage->FindChild(cid);
+                    rec != nullptr && rec->stage != Foundation::ChildStage::Child) {
+                    continue;
+                }
+            }
             const HouseId resolvedHouse = !st.currentHouseId.IsNull()
                                               ? st.currentHouseId
                                               : snap.household->GetTenantHouse(cid.raw());
-            if (resolvedHouse == houseId && st.forcegreetPending &&
-                (!onlyPhysicalActors || !cid.IsSynthetic())) {
+            if (resolvedHouse == houseId && !st.forcegreetPending) {
                 result.push_back(cid);
             }
         }

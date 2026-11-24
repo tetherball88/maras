@@ -26,32 +26,30 @@ namespace MARAS {
         constinit std::atomic<void (*)() noexcept> g_pluginEventSinksResetter{ nullptr };
 
         void RunPostLockItem(PostLockTask& item) noexcept {
-            if (!IsSessionEpochCurrent(item.expectedEpoch)) {
-                MARAS_LOG_DEBUG("[TaskDispatcher] Dropped stale post-lock '{}' task (expected={}, current={})",
-                                item.contextTag ? item.contextTag : "PostLock",
-                                item.expectedEpoch,
-                                GetSessionEpoch());
-                return;
-            }
-            if (!item.fn) {
-                return;
-            }
-
-            if (DeferredActorResolver::GetSingleton().CanSyncEngineInline()) {
-                try {
-                    item.fn();
-                } catch (const std::exception& e) {
-                    MARAS_LOG_ERROR("[TaskDispatcher] Exception in inline post-lock '{}': {}",
-                                    item.contextTag ? item.contextTag : "PostLock", e.what());
-                } catch (...) {
-                    MARAS_LOG_ERROR("[TaskDispatcher] Unknown exception in inline post-lock '{}'",
-                                    item.contextTag ? item.contextTag : "PostLock");
-                }
-                return;
-            }
-
             const char* tag = item.contextTag ? item.contextTag : "PostLock";
-            AddEpochTask(item.expectedEpoch, tag, std::move(item.fn));
+            try {
+                if (!IsSessionEpochCurrent(item.expectedEpoch)) {
+                    MARAS_LOG_DEBUG("[TaskDispatcher] Dropped stale post-lock '{}' task (expected={}, current={})",
+                                    tag,
+                                    item.expectedEpoch,
+                                    GetSessionEpoch());
+                    return;
+                }
+                if (!item.fn) {
+                    return;
+                }
+
+                if (DeferredActorResolver::GetSingleton().CanSyncEngineInline()) {
+                    item.fn();
+                    return;
+                }
+
+                AddEpochTask(item.expectedEpoch, tag, std::move(item.fn));
+            } catch (const std::exception& e) {
+                MARAS_LOG_ERROR("[TaskDispatcher] Exception in post-lock '{}': {}", tag, e.what());
+            } catch (...) {
+                MARAS_LOG_ERROR("[TaskDispatcher] Unknown exception in post-lock '{}'", tag);
+            }
         }
     }  // namespace
 

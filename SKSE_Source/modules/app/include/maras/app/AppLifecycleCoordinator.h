@@ -6,6 +6,7 @@
 #include "maras/engine/EngineEventHooks.h"
 #include "maras/state/SessionEpoch.h"
 
+#include <atomic>
 #include <cstdint>
 #include <mutex>
 #include <optional>
@@ -32,8 +33,10 @@ namespace MARAS::App {
 
         // SKSE Co-Save Lifecycle
         void BeginCoSaveLoad() override;
+        void AbortCoSaveLoad() noexcept override;
         void FinalizeCoSaveLoad(bool loadedAny, const State::CoSaveLoadReport& report) override;
         void OnCoSaveRevert() override;
+        void ResetPendingDailyAgency() noexcept;
 
         // PollingService Timers (Main Thread)
         void OnPollingFastTick(float deltaSeconds) override;
@@ -56,6 +59,10 @@ namespace MARAS::App {
         void OnExternalMarriageFactionAdded(RE::FormID actorId, std::int8_t rank) override;
         void OnExternalMarriageFactionRemoved(RE::FormID actorId) override;
         void OnDialogueOpened(RE::FormID npcId) override;
+        bool OnRecordIntimateCheating(RE::FormID cheaterId,
+                                      RE::FormID victimId,
+                                      RE::FormID affairPartnerId,
+                                      bool isSecret) override;
         void OnIntimateCheatingCaught(RE::FormID cheaterId,
                                       RE::FormID victimId,
                                       RE::FormID affairPartnerId,
@@ -98,15 +105,14 @@ namespace MARAS::App {
         ~AppLifecycleCoordinator() override = default;
 
         void ReleaseCoSaveLoadSuppressions() noexcept;
-        void ResetPendingDailyAgency() noexcept;
 
         std::mutex suppressionMutex_{};
         std::optional<ScopedMemorySuppression> loadMemorySuppression_{};
         std::optional<ScopedProfileSuppression> loadProfileSuppression_{};
 
-        std::uint8_t pendingDailyAgencyStep_{ 0 };
-        float pendingDailyAgencyDay_{ -1.0f };
-        State::SessionEpoch pendingDailyAgencyEpoch_{ 0 };
+        std::atomic<std::uint8_t> pendingDailyAgencyStep_{ 0 };
+        std::atomic<float> pendingDailyAgencyDay_{ -1.0f };
+        std::atomic<State::SessionEpoch> pendingDailyAgencyEpoch_{ 0 };
     };
 
 }  // namespace MARAS::App

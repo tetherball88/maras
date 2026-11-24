@@ -64,10 +64,14 @@ namespace MARAS::App {
         loadMemorySuppression_.reset();
     }
 
+    void AppLifecycleCoordinator::AbortCoSaveLoad() noexcept {
+        ReleaseCoSaveLoadSuppressions();
+    }
+
     void AppLifecycleCoordinator::ResetPendingDailyAgency() noexcept {
-        pendingDailyAgencyStep_ = 0;
-        pendingDailyAgencyDay_ = -1.0f;
-        pendingDailyAgencyEpoch_ = 0;
+        pendingDailyAgencyStep_.store(0, std::memory_order_release);
+        pendingDailyAgencyDay_.store(-1.0f, std::memory_order_relaxed);
+        pendingDailyAgencyEpoch_.store(0, std::memory_order_relaxed);
     }
 
     // =========================================================================
@@ -148,8 +152,8 @@ namespace MARAS::App {
         GetSkyrimNetGateway().RevertMemories();
         GetSkyrimNetGateway().RevertProfiles();
         GetSkyrimNetGateway().RevertEvents();
-        GetModalGateway().Revert();
         GetUiBridgeGateway().Revert();
+        GetModalGateway().Revert();
 
         SettingsCoordinator::GetSingleton().RevertGameSettings();
         RelationshipUseCases::GetSingleton().Revert();
@@ -169,29 +173,27 @@ namespace MARAS::App {
     void AppLifecycleCoordinator::OnPollingFastTick(float deltaSeconds) {
         SkyrimNetActionCoordinator::GetSingleton().TickPendingNarrations(deltaSeconds);
 
-        if (pendingDailyAgencyStep_ == 0) {
+        if (pendingDailyAgencyStep_.load(std::memory_order_acquire) == 0) {
             return;
         }
         std::lock_guard lock(GetPapyrusMutex());
-        if (pendingDailyAgencyStep_ == 0 || !State::IsSessionEpochCurrent(pendingDailyAgencyEpoch_)) {
+        const std::uint8_t step = pendingDailyAgencyStep_.load(std::memory_order_acquire);
+        const State::SessionEpoch scheduledEpoch = pendingDailyAgencyEpoch_.load(std::memory_order_relaxed);
+        if (step == 0 || !State::IsSessionEpochCurrent(scheduledEpoch)) {
             ResetPendingDailyAgency();
             return;
         }
 
-        const float scheduledDay = pendingDailyAgencyDay_;
+        const float scheduledDay = pendingDailyAgencyDay_.load(std::memory_order_relaxed);
         auto& agency = AgencyWorkflowCoordinator::GetSingleton();
-        switch (pendingDailyAgencyStep_) {
+        switch (step) {
             case 1:
-                pendingDailyAgencyStep_ = 2;
+                pendingDailyAgencyStep_.store(2, std::memory_order_release);
                 agency.TryScheduledMatchmaking(scheduledDay);
                 break;
             case 2:
-                pendingDailyAgencyStep_ = 3;
-                agency.TryScheduledPlayerPartnerInfidelity(scheduledDay);
-                break;
-            case 3:
                 ResetPendingDailyAgency();
-                agency.TryScheduledBanter(scheduledDay);
+                agency.TryScheduledPlayerPartnerInfidelity(scheduledDay);
                 break;
             default:
                 ResetPendingDailyAgency();
@@ -241,11 +243,11 @@ namespace MARAS::App {
         PaternityWorkflowCoordinator::GetSingleton().ProcessDailyTick(currentGameDay);
         HouseholdUseCases::GetSingleton().ProcessDailyTick(currentGameDay);
 
-        // Stagger autonomous candidate-scanning passes across the next three 500 ms fast ticks
-        // so midnight rollover never concentrates 7 subsystems into a single render frame.
-        pendingDailyAgencyDay_ = currentGameDay;
-        pendingDailyAgencyEpoch_ = State::GetSessionEpoch();
-        pendingDailyAgencyStep_ = 1;
+        // Stagger autonomous candidate-scanning passes across the next two 500 ms fast ticks
+        // so midnight rollover never concentrates 6 subsystems into a single render frame.
+        pendingDailyAgencyDay_.store(currentGameDay, std::memory_order_relaxed);
+        pendingDailyAgencyEpoch_.store(State::GetSessionEpoch(), std::memory_order_relaxed);
+        pendingDailyAgencyStep_.store(1, std::memory_order_release);
     }
 
     void AppLifecycleCoordinator::OnPollingRefreshChildVisuals() {
@@ -372,6 +374,27 @@ namespace MARAS::App {
         RelationshipInteractionCoordinator::GetSingleton().OnDialogueOpened(npcId);
     }
 
+    bool AppLifecycleCoordinator::OnRecordIntimateCheating(RE::FormID cheaterId,
+                                                           RE::FormID victimId,
+                                                           RE::FormID affairPartnerId,
+                                                           bool isSecret) {
+        std::lock_guard lock(GetPapyrusMutex());
+        auto& rel = RelationshipUseCases::GetSingleton();
+        if (!isSecret && cheaterId != 0 && affairPartnerId != 0) {
+            // Expose any pre-existing secret affair for this victim/paramour via "caught" BEFORE
+            // RecordCheating flips isSecret to false so maras_affair_exposed fires and Confess* intent clears.
+            (void)rel.SetCheatingDiscovered(cheaterId, affairPartnerId, "caught", victimId);
+        }
+        return rel.RecordCheating(
+            cheaterId,
+            victimId,
+            affairPartnerId,
+            isSecret,
+            Foundation::AffairType::Casual,
+            Foundation::AffairStatus::Ongoing,
+            Foundation::AffairStage::Physical);
+    }
+
     void AppLifecycleCoordinator::OnIntimateCheatingCaught(RE::FormID cheaterId,
                                                            RE::FormID victimId,
                                                            RE::FormID affairPartnerId,
@@ -380,10 +403,11 @@ namespace MARAS::App {
                                                            bool isWalkIn) {
         std::lock_guard lock(GetPapyrusMutex());
 
-        AffectionEventCoordinator::GetSingleton().OnCheatingCaught(cheaterId, victimId);
-
+        // Mark secret affairs discovered & reconcile factions BEFORE downstream affection/SkyrimNet reactions
         RelationshipUseCases::GetSingleton().HandleIntimateCheatingCaught(
             cheaterId, victimId, affairPartnerId, isWalkIn);
+
+        AffectionEventCoordinator::GetSingleton().OnCheatingCaught(cheaterId, victimId);
 
         if (GetSkyrimNetGateway().IsAvailable()) {
             GetSkyrimNetGateway().EmitCheatingCaught(victimId, cheaterId, affairPartnerId, isWalkIn);

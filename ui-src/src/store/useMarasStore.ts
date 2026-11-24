@@ -209,6 +209,7 @@ interface MarasState {
   setLastNPCIndexDumpResult: (result: DataDumpResult | null) => void
 
   closeUi: () => void
+  resetSessionState: () => void
   refreshData: () => void
   logTestSignal: () => void
 }
@@ -283,6 +284,33 @@ let pendingMatchmakingSettingsUpdates: Partial<MatchmakingSettings> = {}
 
 const updateSettingDebounceTimers = new Map<string, ReturnType<typeof setTimeout>>()
 const pendingSettingUpdates = new Map<string, any>()
+
+let allNpcsLoadSafetyTimer: ReturnType<typeof setTimeout> | null = null
+
+export function discardPendingDebouncedActions() {
+  if (matchmakingSettingsDebounceTimer) {
+    clearTimeout(matchmakingSettingsDebounceTimer)
+    matchmakingSettingsDebounceTimer = null
+  }
+  pendingMatchmakingSettingsUpdates = {}
+
+  for (const [, timer] of updateSettingDebounceTimers.entries()) {
+    clearTimeout(timer)
+  }
+  updateSettingDebounceTimers.clear()
+  pendingSettingUpdates.clear()
+
+  for (const [, timer] of setAffectionDebounceTimers.entries()) {
+    clearTimeout(timer)
+  }
+  setAffectionDebounceTimers.clear()
+  pendingAffectionUpdates.clear()
+
+  if (allNpcsLoadSafetyTimer) {
+    clearTimeout(allNpcsLoadSafetyTimer)
+    allNpcsLoadSafetyTimer = null
+  }
+}
 
 export function flushAllPendingDebouncedActions() {
   // 1. Flush pending Matchmaking Settings
@@ -1072,13 +1100,30 @@ export const useMarasStore = create<MarasState>((set, get) => ({
   },
   setPlayerHomes: (playerHomes: PlayerHouse[]) => set({ playerHomes }),
 
-  setAllSkyrimNpcs: (allSkyrimNpcs) => set({ allSkyrimNpcs, isLoadingAllNpcs: false }),
+  setAllSkyrimNpcs: (allSkyrimNpcs) => {
+    if (allNpcsLoadSafetyTimer) {
+      clearTimeout(allNpcsLoadSafetyTimer)
+      allNpcsLoadSafetyTimer = null
+    }
+    set({ allSkyrimNpcs, isLoadingAllNpcs: false })
+  },
 
   fetchAllSkyrimNpcs: () => {
     const { isInGame } = get()
+    if (allNpcsLoadSafetyTimer) {
+      clearTimeout(allNpcsLoadSafetyTimer)
+      allNpcsLoadSafetyTimer = null
+    }
     set({ isLoadingAllNpcs: true })
     if (isInGame) {
       sendMarasAction('fetchAllSkyrimNpcs')
+      allNpcsLoadSafetyTimer = setTimeout(() => {
+        allNpcsLoadSafetyTimer = null
+        if (get().isLoadingAllNpcs) {
+          console.warn('[MarasStore] fetchAllSkyrimNpcs timed out after 15s; clearing spinner')
+          set({ isLoadingAllNpcs: false })
+        }
+      }, 15000)
     } else {
       setTimeout(() => {
         set({ allSkyrimNpcs: mockAllSkyrimNpcs, isLoadingAllNpcs: false })
@@ -1242,10 +1287,9 @@ export const useMarasStore = create<MarasState>((set, get) => ({
 
       let nextProfiles = state.npcProfiles
       if (data.npcProfiles && Array.isArray(data.npcProfiles)) {
-        const newMap = new Map(state.npcProfiles)
+        const newMap = new Map<string, NPCProfile>()
         data.npcProfiles.forEach((npc) => {
-          const existing = newMap.get(npc.formId)
-          newMap.set(npc.formId, existing ? { ...existing, ...npc } : npc)
+          newMap.set(npc.formId, npc)
         })
         updates.npcProfiles = newMap
         nextProfiles = newMap
@@ -1260,8 +1304,7 @@ export const useMarasStore = create<MarasState>((set, get) => ({
       if (data.children && Array.isArray(data.children)) {
         const newMap = new Map<string, ChildRecord>()
         data.children.forEach((c) => {
-          const existing = state.rawChildren.get(c.childId)
-          newMap.set(c.childId, existing ? { ...existing, ...c } : c)
+          newMap.set(c.childId, c)
         })
         nextRawChildren = newMap
       }
@@ -1272,7 +1315,7 @@ export const useMarasStore = create<MarasState>((set, get) => ({
       }
 
       if (data.affectionData && Array.isArray(data.affectionData)) {
-        const newMap = new Map(state.affectionData)
+        const newMap = new Map<string, AffectionData>()
         data.affectionData.forEach((aff) => newMap.set(aff.formId, aff))
         updates.affectionData = newMap
       }
@@ -1420,7 +1463,7 @@ export const useMarasStore = create<MarasState>((set, get) => ({
       !existing ||
       (Object.keys(updates) as (keyof NPCProfile)[]).some((key) => {
         const newVal = updates[key]
-        if (newVal === undefined) return false
+        if (!skipBridge && newVal === undefined) return false
         return !isSameValue(newVal, existing[key])
       })
 
@@ -2186,13 +2229,56 @@ export const useMarasStore = create<MarasState>((set, get) => ({
 
   closeUi: () => {
     flushAllPendingDebouncedActions()
-    sendMarasAction('closeUi')
-    if (typeof window !== 'undefined' && window.closeMARAS) {
+    if (typeof window !== 'undefined' && window.marasAction) {
+      sendMarasAction('closeUi')
+    } else if (typeof window !== 'undefined' && window.closeMARAS) {
       window.closeMARAS()
     } else {
       window.log?.('closeMARAS called (standalone mode)')
     }
     set({ isOpen: false })
+  },
+
+  resetSessionState: () => {
+    const emptyProfiles = new Map<string, NPCProfile>()
+    const emptyChildren = new Map<string, ChildRecord>()
+    set((state) => ({
+      isOpen: false,
+      isGamePaused: false,
+      npcDetailId: null,
+      npcDetailPartnerId: null,
+      npcDetailPreviousContext: null,
+      selectedNpcId: null,
+      detailPanelOpen: false,
+      evaluatingChildId: null,
+      matchmakingModalOpen: false,
+      matchmakingTargetNpcId: null,
+      aiSuggestions: [],
+      isGeneratingAiSuggestions: false,
+      searchQueryA: '',
+      searchQueryB: '',
+      searchQueryModal: '',
+      searchResultsA: [],
+      searchResultsB: [],
+      searchResultsModal: [],
+      isSearchingA: false,
+      isSearchingB: false,
+      isSearchingModal: false,
+      isLoadingAllNpcs: false,
+      npcProfiles: emptyProfiles,
+      ...computeVisibleSecretsState(
+        [],
+        emptyChildren,
+        [],
+        Boolean(state.settings.revealSecretsInUI),
+        emptyProfiles,
+      ),
+      affectionData: new Map<string, AffectionData>(),
+      hierarchyRanks: ['', '', ''],
+      playerHomes: [],
+      householdBuffs: null,
+      isLoadingBuffs: false,
+    }))
   },
 
   refreshData: () => {

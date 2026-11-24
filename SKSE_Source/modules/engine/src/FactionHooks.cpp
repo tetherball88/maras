@@ -427,6 +427,7 @@ namespace MARAS {
                 bool dispatchOk = true;
                 auto applyOriginal = [&]() {
                     dispatched = true;
+                    FactionReconciler::InternalFactionScope internalScope;
                     dispatchOk = origNative->MarshallAndDispatch(
                         a_baseValue, a_vm, a_stackID, a_resultValue, a_frame);
                 };

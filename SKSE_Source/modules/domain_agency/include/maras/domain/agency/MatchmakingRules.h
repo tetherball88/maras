@@ -5,7 +5,9 @@
 #include "maras/state/WorldState.h"
 #include "maras/state/WorldTables.h"
 
+#include <string>
 #include <string_view>
+#include <utility>
 #include <vector>
 
 namespace MARAS::Domain::Agency {
@@ -48,5 +50,22 @@ namespace MARAS::Domain::Agency {
 
     [[nodiscard]] std::string_view GetOrientationRuleText(
         MatchmakingOrientation orientation) noexcept;
+
+    [[nodiscard]] std::string BuildAllowedOperationsText(
+        bool allowBreakups,
+        bool allowOpenClose);
+
+    [[nodiscard]] std::string BuildAllowedActionsString(
+        bool allowBreakups,
+        bool allowOpenClose);
+
+    [[nodiscard]] std::string_view BuildCheatingRuleText(bool allowCheating) noexcept;
+
+    [[nodiscard]] std::string_view BuildBreakupRuleText(bool allowBreakups) noexcept;
+
+    [[nodiscard]] std::string_view BuildOpenCloseRuleText(bool allowOpenClose) noexcept;
+
+    [[nodiscard]] std::pair<std::string_view, RelationshipStatus> GetBreakupTargetStatus(
+        RelationshipStatus currentStatus) noexcept;
 
 }  // namespace MARAS::Domain::Agency

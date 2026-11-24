@@ -3,13 +3,17 @@
 
 #include <spdlog/spdlog.h>
 
+#include "maras/app/AgencyWorkflowCoordinator.h"
 #include "maras/app/AppContext.h"
 #include "maras/app/AppLifecycleCoordinator.h"
 #include "maras/app/ChildSkyrimNetSuccession.h"
 #include "maras/app/HouseholdUseCases.h"
 #include "maras/app/LineageUseCases.h"
+#include "maras/app/MigrationDiagnosticsCoordinator.h"
+#include "maras/app/PaternityWorkflowCoordinator.h"
 #include "maras/app/RelationshipUseCases.h"
 #include "maras/app/SettingsCoordinator.h"
+#include "maras/app/SkyrimNetActionCoordinator.h"
 #include "maras/bridge_papyrus/PapyrusInterface.h"
 #include "maras/bridge_papyrus/SanityConsoleCommand.h"
 #include "maras/bridge_skyrimnet/SkyrimNetApiLoader.h"
@@ -469,12 +473,18 @@ SKSEPluginLoad(const SKSE::LoadInterface* skse) {
                         MARAS::PollingService::GetSingleton().Shutdown();
                         MARAS::ChildVisualReconciler::GetSingleton().Revert();
                         MARAS::SpatialWorldIndex::GetSingleton().ClearLoadedActors();
-                        MARAS::App::GetModalGateway().Revert();
+                        MARAS::App::AppLifecycleCoordinator::GetSingleton().ResetPendingDailyAgency();
+                        MARAS::App::MigrationDiagnosticsCoordinator::GetSingleton().OnCoSaveRevert();
                         MARAS::App::GetUiBridgeGateway().Revert();
+                        MARAS::App::GetModalGateway().Revert();
                         MARAS::IntimateThreadService::GetSingleton().ClearAll();
                         MARAS::ChildrenFleeService::GetSingleton().Reset();
                         MARAS::App::GetSkyrimNetGateway().RevertMemories();
                         MARAS::App::GetSkyrimNetGateway().RevertProfiles();
+                        MARAS::App::GetSkyrimNetGateway().RevertEvents();
+                        MARAS::App::PaternityWorkflowCoordinator::GetSingleton().Revert();
+                        MARAS::App::AgencyWorkflowCoordinator::GetSingleton().Revert();
+                        MARAS::App::SkyrimNetActionCoordinator::GetSingleton().Revert();
                         break;
 
                     case SKSE::MessagingInterface::kPostLoadGame:

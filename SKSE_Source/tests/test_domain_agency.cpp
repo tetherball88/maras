@@ -3,6 +3,7 @@
 #include "maras/domain/agency/BanterPlanner.h"
 #include "maras/domain/agency/EncounterTemplate.h"
 #include "maras/domain/agency/MatchmakingRules.h"
+#include "maras/domain/agency/MatchmakingValidationRules.h"
 #include "maras/domain/agency/NpcMatchmaker.h"
 #include "maras/domain/agency/PartnerAgencyEvaluator.h"
 #include "maras/foundation/IRng.h"
@@ -95,17 +96,21 @@ namespace MARAS::Tests {
         const float chance = ComputePartnerCheatingChance(ws.Snapshot(), input, 30.0f, 0, 0, true, 2);
         MARAS_CHECK(chance > 0.0f);
 
-        // Expired SuggestOpen pending intent forces SeekSecretAffair action
+        // Expired SuggestOpen pending intent forces exactly ONE affair action (C6: no duplicate SeekSecretAffair)
         ws.relationships.Write().SetPendingIntent(partner, PendingPartnerIntentRecord{
             .type = PartnerIntentType::SuggestOpen,
             .createdGameDay = 10.0f
         });
         DeterministicRng rng{ 55u };
         const auto actions = EvaluatePartnerAgencyActions(ws.Snapshot(), { input }, 30.0f, rng);
-        MARAS_CHECK(actions.size() >= 2);
+        MARAS_REQUIRE_EQ(actions.size(), std::size_t{ 1 });
         MARAS_CHECK_EQ(actions[0].type, PartnerAgencyActionType::ExpiredIntentForceSuggestOpenAffair);
 
-        // Home arrival prioritizes active pending forcegreet in same cell over letter roll
+        // Home arrival prioritizes active pending forcegreet in same cell ONLY when partner resides at location
+        const LocationId partnerHome{ 0x00042010u };
+        const LocationId randomDungeon{ 0x00042099u };
+        (void)ws.household.Write().RegisterHouse(HouseId{ partnerHome.raw() }, RefId{ 0x00042011u });
+        (void)ws.household.Write().AssignTenant(partner.raw(), HouseId{ partnerHome.raw() }, true, false);
         ws.relationships.Write().SetPendingIntent(partner, PendingPartnerIntentRecord{
             .type = PartnerIntentType::SuggestClose,
             .createdGameDay = 29.5f
@@ -123,8 +128,11 @@ namespace MARAS::Tests {
         spatial.AddSample(npcSample);
         spatial.FinalizeSortAndDedupe();
 
+        // Non-home location MUST NOT fire home arrival
+        MARAS_CHECK(!EvaluatePartnerHomeArrival(ws.Snapshot(), spatial, randomDungeon, false, 19, 30.0f, rng).has_value());
+
         const auto arrival = EvaluatePartnerHomeArrival(
-            ws.Snapshot(), spatial, LocationId{ 0x00042010u }, false, 19, 30.0f, rng);
+            ws.Snapshot(), spatial, partnerHome, false, 19, 30.0f, rng);
         MARAS_REQUIRE(arrival.has_value());
         MARAS_CHECK_EQ(arrival->kind, HomeArrivalKind::PendingIntentForcegreet);
         MARAS_CHECK_EQ(arrival->intentType, PartnerIntentType::SuggestClose);
@@ -640,16 +648,26 @@ namespace MARAS::Tests {
         };
 
         // 1. Expired pending intent is skipped for PendingIntentForcegreet, falling through to event roll
+        //    Requires residence AND an actual active non-player Lover for open-rel scenarios (C4)
         populateSpatial(homeCell);
+        (void)ws.household.Write().RegisterHouse(HouseId{ homeA.raw() }, RefId{ 0x00044312u });
+        (void)ws.household.Write().RegisterHouse(HouseId{ homeB.raw() }, RefId{ 0x00044313u });
+        (void)ws.household.Write().AssignTenant(spouse.raw(), HouseId{ homeA.raw() }, true, false);
         ws.relationships.Write().SetPendingIntent(spouse, PendingPartnerIntentRecord{
             .type = PartnerIntentType::SuggestOpen,
             .createdGameDay = 10.0f  // age 20.0 >= TTL 4.0 -> expired
         });
         (void)ws.SetPairOpen(ActorId::Player(), spouse, true, 5.0f);
+        // Open partner with NO side lover must NOT trigger
+        MARAS_CHECK(!EvaluatePartnerHomeArrival(ws.Snapshot(), spatial, homeA, false, 20, 30.0f, alwaysRollRng).has_value());
+        // Add real open side lover
+        AddAdult(ws, lover);
+        (void)ws.TransitionRelationship(spouse, lover, RelationshipStatus::Lover, 6.0f, spouse, meta);
         {
             const auto plan = EvaluatePartnerHomeArrival(ws.Snapshot(), spatial, homeA, false, 20, 30.0f, alwaysRollRng);
             MARAS_REQUIRE(plan.has_value());
             MARAS_CHECK_EQ(plan->kind, HomeArrivalKind::OpenDateInHouse);
+            MARAS_CHECK_EQ(plan->relatedLoverId, lover);
         }
 
         // 2. Same Open pair with tavern marker present (50% roll succeeds under FixedZeroRng) OR partner not in cell -> OpenDateLetter
@@ -657,40 +675,58 @@ namespace MARAS::Tests {
             const auto planTavern = EvaluatePartnerHomeArrival(ws.Snapshot(), spatial, homeA, true, 20, 30.0f, alwaysRollRng);
             MARAS_REQUIRE(planTavern.has_value());
             MARAS_CHECK_EQ(planTavern->kind, HomeArrivalKind::OpenDateLetter);
+            MARAS_CHECK_EQ(planTavern->relatedLoverId, lover);
 
             populateSpatial(otherCell);
-            const auto planAway = EvaluatePartnerHomeArrival(ws.Snapshot(), spatial, homeA, false, 20, 30.0f, alwaysRollRng);
+            const auto planAwayNoTavern = EvaluatePartnerHomeArrival(ws.Snapshot(), spatial, homeA, false, 20, 30.0f, alwaysRollRng);
+            MARAS_CHECK(!planAwayNoTavern.has_value());
+            const auto planAway = EvaluatePartnerHomeArrival(ws.Snapshot(), spatial, homeA, true, 20, 30.0f, alwaysRollRng);
             MARAS_REQUIRE(planAway.has_value());
             MARAS_CHECK_EQ(planAway->kind, HomeArrivalKind::OpenDateLetter);
+            MARAS_CHECK_EQ(planAway->relatedLoverId, lover);
         }
 
-        // 3. Per-location cooldown blocks homeA while allowing homeB
+        // 3. Per-location cooldown blocks homeA; moving spouse to homeB allows homeB
         ws.cooldowns.Write().lastHomeArrivalEventDayByLoc[homeA] = 29.5f;  // elapsed 0.5 < 2.0
         {
-            const auto blocked = EvaluatePartnerHomeArrival(ws.Snapshot(), spatial, homeA, false, 20, 30.0f, alwaysRollRng);
+            const auto blocked = EvaluatePartnerHomeArrival(ws.Snapshot(), spatial, homeA, true, 20, 30.0f, alwaysRollRng);
             MARAS_CHECK(!blocked.has_value());
-            const auto allowedOtherHome = EvaluatePartnerHomeArrival(ws.Snapshot(), spatial, homeB, false, 20, 30.0f, alwaysRollRng);
+            // Spouse still resides at homeA -> homeB blocked until reassigned
+            MARAS_CHECK(!EvaluatePartnerHomeArrival(ws.Snapshot(), spatial, homeB, true, 20, 30.0f, alwaysRollRng).has_value());
+            (void)ws.household.Write().AssignTenant(spouse.raw(), HouseId{ homeB.raw() }, true, false);
+            const auto allowedOtherHome = EvaluatePartnerHomeArrival(ws.Snapshot(), spatial, homeB, true, 20, 30.0f, alwaysRollRng);
             MARAS_REQUIRE(allowedOtherHome.has_value());
             MARAS_CHECK_EQ(allowedOtherHome->kind, HomeArrivalKind::OpenDateLetter);
         }
 
-        // 4. Ongoing Talking vs Physical secret affairs -> CheatingTalkingLetter / CheatingPhysicalLetter
+        // 4. Ongoing Talking vs Physical secret affairs -> Letter (with tavern) and InHouse (partner in cell, no tavern)
         (void)ws.SetPairOpen(ActorId::Player(), spouse, false, 20.0f);
         (void)ws.RecordCheatingIncident(
             spouse, ActorId::Player(), lover, true,
             AffairType::Lover, AffairStatus::Ongoing, AffairStage::Talking, 25.0f);
         {
-            const auto talkLetter = EvaluatePartnerHomeArrival(ws.Snapshot(), spatial, homeB, false, 20, 30.0f, alwaysRollRng);
+            const auto talkLetter = EvaluatePartnerHomeArrival(ws.Snapshot(), spatial, homeB, true, 20, 30.0f, alwaysRollRng);
             MARAS_REQUIRE(talkLetter.has_value());
             MARAS_CHECK_EQ(talkLetter->kind, HomeArrivalKind::CheatingTalkingLetter);
             MARAS_CHECK_EQ(talkLetter->relatedLoverId, lover);
+
+            populateSpatial(homeCell);
+            const auto talkInHouse = EvaluatePartnerHomeArrival(ws.Snapshot(), spatial, homeB, false, 20, 30.0f, alwaysRollRng);
+            MARAS_REQUIRE(talkInHouse.has_value());
+            MARAS_CHECK_EQ(talkInHouse->kind, HomeArrivalKind::CheatingTalkingInHouse);
+            MARAS_CHECK_EQ(talkInHouse->relatedLoverId, lover);
         }
 
         (void)ws.RecordCheatingIncident(
             spouse, ActorId::Player(), lover, true,
             AffairType::Lover, AffairStatus::Ongoing, AffairStage::Physical, 29.0f);
         {
-            const auto physLetter = EvaluatePartnerHomeArrival(ws.Snapshot(), spatial, homeB, false, 20, 30.0f, alwaysRollRng);
+            const auto physInHouse = EvaluatePartnerHomeArrival(ws.Snapshot(), spatial, homeB, false, 20, 30.0f, alwaysRollRng);
+            MARAS_REQUIRE(physInHouse.has_value());
+            MARAS_CHECK_EQ(physInHouse->kind, HomeArrivalKind::CheatingPhysicalInHouse);
+
+            populateSpatial(otherCell);
+            const auto physLetter = EvaluatePartnerHomeArrival(ws.Snapshot(), spatial, homeB, true, 20, 30.0f, alwaysRollRng);
             MARAS_REQUIRE(physLetter.has_value());
             MARAS_CHECK_EQ(physLetter->kind, HomeArrivalKind::CheatingPhysicalLetter);
         }
@@ -1173,6 +1209,229 @@ namespace MARAS::Tests {
         MARAS_CHECK(cd.npcLastMatchmakingChangeDay.contains(openB));
         MARAS_CHECK(!cd.banterCoupleCooldowns.contains(CanonicalPairKey(openA, openB)));
         MARAS_CHECK(cd.banterCoupleCooldowns.contains(CanonicalPairKey(openB, openBMain)));
+    }
+
+    MARAS_TEST(DomainAgency, Wave1MatchmakingPromptStringsAndPartnerAgencyParity) {
+        struct ZeroRng final : public IRng {
+            float NextFloat(float minVal = 0.0f, float = 1.0f) override { return minVal; }
+            std::int32_t NextInt(std::int32_t minVal, std::int32_t) override { return minVal; }
+        };
+
+        // 1. Prompt contract strings & unregistered world-adult scheduled eligibility
+        MARAS_CHECK_EQ(GetEligibilityCategoryString(true, false), std::string_view("can form main"));
+        MARAS_CHECK_EQ(GetEligibilityCategoryString(false, true), std::string_view("secondary only (allowed)"));
+        MARAS_CHECK_EQ(GetEligibilityCategoryString(false, false), std::string_view("secondary only (cheating)"));
+        MARAS_CHECK_EQ(BuildAllowedActionsString(true, true), std::string("new|advance|breakup|open|close"));
+        MARAS_CHECK_EQ(BuildAllowedActionsString(false, false), std::string("new|advance"));
+        MARAS_CHECK_EQ(GetBreakupTargetStatus(RelationshipStatus::Married).first, std::string_view("divorced"));
+        MARAS_CHECK_EQ(GetBreakupTargetStatus(RelationshipStatus::Engaged).first, std::string_view("jilted"));
+        MARAS_CHECK_EQ(GetBreakupTargetStatus(RelationshipStatus::Dating).first, std::string_view("exdating"));
+        MARAS_CHECK_EQ(GetBreakupTargetStatus(RelationshipStatus::Lover).first, std::string_view("exlover"));
+
+        WorldState wsElig{};
+        const ActorId unregisteredWorldNpc{ 0x00049001u };
+        MARAS_CHECK(IsEligibleForScheduledMatchmaking(wsElig.Snapshot(), unregisteredWorldNpc, 10.0f));
+        MARAS_CHECK(!IsEligibleForScheduledMatchmaking(wsElig.Snapshot(), ActorId::Player(), 10.0f));
+        MARAS_CHECK(!IsEligibleForScheduledMatchmaking(wsElig.Snapshot(), ActorId::UnknownFather(), 10.0f));
+
+        // 2. H1.2 (Secret / wrong-victim affair does NOT trigger revenge) + M6 (Dating/Engaged rank = -1)
+        DefaultActorMetadataProvider meta{};
+        ZeroRng zeroRng{};
+        WorldState wsRev{};
+        const ActorId datingPartner{ 0x00049101u };
+        const ActorId otherSpouse{ 0x00049102u };
+        const ActorId playerParamour{ 0x00049103u };
+        AddAdult(wsRev, datingPartner, Temperament::Jealous);
+        AddAdult(wsRev, otherSpouse, Temperament::Proud);
+        wsRev.settings.Write().enablePlayerPolygamy = true;
+        wsRev.settings.Write().playerPartnerCheatingAgencyEnabled = true;
+        wsRev.settings.Write().playerPartnerCheatingEnableRevenge = true;
+        wsRev.settings.Write().playerPartnerCheatingEnableHierarchy = true;
+        wsRev.settings.Write().playerPartnerAgencyEnableForceGreets = false;
+        (void)wsRev.TransitionRelationship(ActorId::Player(), datingPartner, RelationshipStatus::Dating, 1.0f, ActorId::Player(), meta);
+        (void)wsRev.TransitionRelationship(ActorId::Player(), otherSpouse, RelationshipStatus::Married, 1.0f, ActorId::Player(), meta);
+        wsRev.affection.Write().SetPermanent(datingPartner, 30);  // baseAff = 18
+        wsRev.affection.Write().SetLastInteractionDay(datingPartner, 10.0f);
+
+        // Secret player affair against datingPartner + discovered affair against OTHER spouse -> NO revenge!
+        (void)wsRev.affairs.Write().RecordIncident(
+            ActorId::Player(), datingPartner, playerParamour, /*isSecret=*/true,
+            AffairType::Casual, AffairStatus::Ongoing, AffairStage::Physical, 9.0f);
+        (void)wsRev.affairs.Write().RecordIncident(
+            ActorId::Player(), otherSpouse, playerParamour, /*isSecret=*/false,
+            AffairType::Casual, AffairStatus::Ongoing, AffairStage::Physical, 9.0f);
+
+        const PartnerAgencyInput dInput{ datingPartner, "DatingJealous", ActorSex::Female, false, false };
+        const auto noRevPlans = EvaluatePartnerAgencyActions(wsRev.Snapshot(), { dInput }, 10.0f, zeroRng);
+        MARAS_REQUIRE_EQ(noRevPlans.size(), std::size_t{ 1 });
+        MARAS_CHECK_EQ(noRevPlans[0].type, PartnerAgencyActionType::SeekSecretAffair);
+        // Without revenge and with Dating rank=-1 (no +8% hierarchy): 18 * 0.70 (Jealous no-revenge) = 12.6%
+        MARAS_CHECK(std::fabs(noRevPlans[0].rolledChance - 12.6f) < 1e-2f);
+
+        // Exposing the affair against datingPartner triggers revenge: (18 + 15) * 1.75 = 57.75%
+        (void)wsRev.affairs.Write().ExposeAndResolve(
+            ActorId::Player(), playerParamour, datingPartner, AffairResolution::None);
+        const auto revPlans = EvaluatePartnerAgencyActions(wsRev.Snapshot(), { dInput }, 10.0f, zeroRng);
+        MARAS_REQUIRE_EQ(revPlans.size(), std::size_t{ 1 });
+        MARAS_CHECK(std::fabs(revPlans[0].rolledChance - 57.75f) < 1e-2f);
+
+        // 3. H8 (BreakupOpenLover + open Lover edge counting) & M9 (cheatingAgencyEnabled gate)
+        WorldState wsOpen{};
+        const ActorId openSpouse{ 0x00049201u };
+        const ActorId openLover{ 0x00049202u };
+        const ActorId closedSpouse{ 0x00049203u };
+        const ActorId closedParamour{ 0x00049204u };
+        for (ActorId id : { openSpouse, openLover, closedSpouse, closedParamour }) {
+            AddAdult(wsOpen, id, Temperament::Independent);
+        }
+        wsOpen.settings.Write().enablePlayerPolygamy = true;
+        wsOpen.settings.Write().playerPartnerOpenRelAgencyEnabled = true;
+        wsOpen.settings.Write().playerPartnerCheatingAgencyEnabled = false;  // M9 gate
+        wsOpen.settings.Write().playerPartnerCheatingMaxSecretLovers = 1;
+        wsOpen.settings.Write().lonelinessThresholdDays = 2;  // minBreakupAge = 3.0d
+        (void)wsOpen.TransitionRelationship(ActorId::Player(), openSpouse, RelationshipStatus::Married, 1.0f, ActorId::Player(), meta);
+        (void)wsOpen.SetPairOpen(ActorId::Player(), openSpouse, true, 1.0f);
+        (void)wsOpen.TransitionRelationship(openSpouse, openLover, RelationshipStatus::Lover, 2.0f, openSpouse, meta);
+        (void)wsOpen.TransitionRelationship(ActorId::Player(), closedSpouse, RelationshipStatus::Married, 1.0f, ActorId::Player(), meta);
+        (void)wsOpen.RecordCheatingIncident(
+            closedSpouse, ActorId::Player(), closedParamour, true,
+            AffairType::Lover, AffairStatus::Ongoing, AffairStage::Talking, 2.0f);
+
+        const auto gatedPlans = EvaluatePartnerAgencyActions(
+            wsOpen.Snapshot(),
+            { { openSpouse, "OpenSpouse", ActorSex::Female, false, false },
+              { closedSpouse, "ClosedSpouse", ActorSex::Female, false, false } },
+            20.0f,
+            zeroRng);
+        bool sawOpenBreakup = false;
+        bool sawOpenSeek = false;
+        bool sawClosedAction = false;
+        for (const auto& p : gatedPlans) {
+            if (p.partnerId == openSpouse && p.type == PartnerAgencyActionType::BreakupOpenLover) {
+                sawOpenBreakup = true;
+                MARAS_CHECK_EQ(p.relatedLoverId, openLover);
+            }
+            if (p.partnerId == openSpouse && p.type == PartnerAgencyActionType::SeekOpenLover) {
+                sawOpenSeek = true;
+            }
+            if (p.partnerId == closedSpouse) {
+                sawClosedAction = true;
+            }
+        }
+        MARAS_CHECK(sawOpenBreakup);   // H8: BreakupOpenLover emitted
+        MARAS_CHECK(!sawOpenSeek);     // H8: openLovers.size() == 1 hits maxSecretLovers cap (1)
+        MARAS_CHECK(!sawClosedAction); // M9: cheating agency disabled blocks escalation & Action A
+    }
+
+    MARAS_TEST(DomainAgency, MatchmakingCandidateValidationVerifyFilterAndShortlistChoice) {
+        // 1. Action normalization (including legacy open_close hints)
+        MARAS_CHECK_EQ(NormalizeMatchmakingAction("open_close", "closed"), std::string("close"));
+        MARAS_CHECK_EQ(NormalizeMatchmakingAction("open_close", "open"), std::string("open"));
+        MARAS_CHECK_EQ(NormalizeMatchmakingAction("open_close", "", false), std::string("close"));
+        MARAS_CHECK_EQ(NormalizeMatchmakingAction("open_close", "", true), std::string("open"));
+        MARAS_CHECK_EQ(NormalizeMatchmakingAction("create", "dating"), std::string("new"));
+
+        // 2. H9: Candidate validation — cooldown gate, orientation on new/advance only, breakup/open/close bypass orientation, cheating gate & co-spouse exemption
+        WorldState ws;
+        const ActorId a{ 0x0001A69A };
+        const ActorId b{ 0x000A2C94 };
+        const ActorId c{ 0x0001A671 };
+        AddAdult(ws, a);
+        AddAdult(ws, b);
+        AddAdult(ws, c);
+        ws.settings.Write().matchmakingOrientation = MatchmakingOrientation::Heterosexual;
+        ws.settings.Write().matchmakingNpcCooldownDays = 10;
+        ws.settings.Write().matchmakingAllowBreakups = true;
+        ws.settings.Write().matchmakingAllowOpenClose = true;
+        ws.settings.Write().matchmakingAllowCheating = false;
+        ws.cooldowns.Write().npcLastMatchmakingChangeDay[a] = 15.0f;
+        DefaultActorMetadataProvider meta{};
+        (void)ws.TransitionRelationship(a, b, RelationshipStatus::Married, 1.0f, a, meta);
+        const auto snap = ws.Snapshot();
+
+        // Cooldown blocks scheduled (checkCooldown=true), allowed on manual/partner (checkCooldown=false)
+        CandidateValidationInput in{};
+        in.actorA = a;
+        in.actorB = b;
+        in.action = "breakup";
+        in.currentGameDay = 20.0f;
+        in.actorASex = ActorSex::Female;
+        in.actorBSex = ActorSex::Female;  // Same-sex pair under HeteroOnly!
+        in.checkCooldown = true;
+        MARAS_CHECK(!ValidateMatchmakingCandidate(snap, in).valid);
+        in.checkCooldown = false;
+        const auto brkOut = ValidateMatchmakingCandidate(snap, in);
+        MARAS_CHECK(brkOut.valid);
+        MARAS_CHECK_EQ(brkOut.normalizedTargetStatus, std::string("divorced"));
+
+        // Open/close also ignore orientation
+        in.action = "open";
+        in.canOpen = true;
+        const auto openOut = ValidateMatchmakingCandidate(snap, in);
+        MARAS_CHECK(openOut.valid && openOut.normalizedTargetStatus == "open");
+
+        // Orientation DOES block new/advance
+        in.action = "new";
+        in.targetStatus = "";
+        const auto orientBlocked = ValidateMatchmakingCandidate(snap, in);
+        MARAS_CHECK(!orientBlocked.valid);
+
+        // Empty new target defaults to "dating"; exclusive-main lover blocked when cheating disabled
+        in.actorB = c;
+        in.actorBSex = ActorSex::Male;
+        in.targetStatus = "lover";
+        const auto cheatBlocked = ValidateMatchmakingCandidate(snap, in);
+        MARAS_CHECK(!cheatBlocked.valid);
+        ws.settings.Write().matchmakingAllowCheating = true;
+        const auto cheatOk = ValidateMatchmakingCandidate(ws.Snapshot(), in);
+        MARAS_CHECK(cheatOk.valid && cheatOk.isCheating);
+
+        // Co-spouses of Player are exempt from cheating transition flag
+        WorldState wsPoly;
+        AddAdult(wsPoly, a);
+        AddAdult(wsPoly, b);
+        (void)wsPoly.TransitionRelationship(ActorId::Player(), a, RelationshipStatus::Married, 1.0f, ActorId::Player(), meta);
+        (void)wsPoly.TransitionRelationship(ActorId::Player(), b, RelationshipStatus::Married, 1.0f, ActorId::Player(), meta);
+        MARAS_CHECK(!IsPairCheatingTransition(wsPoly.Snapshot(), a, b, "lover"));
+
+        // 3. H3: Verify batch reducer rejects BOTH failed tasks (!taskSuccess) AND unsuitable verdicts
+        const auto failDec = EvaluateVerificationBatchItem(false, /*taskSuccess=*/false, /*evalSuitable=*/true, "HTTP timeout", "", "");
+        MARAS_CHECK(failDec.skipped && failDec.skipReason == "HTTP timeout");
+        const auto unsuitDec = EvaluateVerificationBatchItem(false, true, false, "", "Clashing morals", "");
+        MARAS_CHECK(unsuitDec.skipped && unsuitDec.skipReason == "Clashing morals");
+        const auto okPlaceholder = EvaluateVerificationBatchItem(false, true, true, "", "No reason provided", "");
+        MARAS_CHECK(!okPlaceholder.skipped && okPlaceholder.memoryToApply.empty());
+        const auto okMem = EvaluateVerificationBatchItem(false, true, true, "", "Shared tavern spark", "");
+        MARAS_CHECK(!okMem.skipped && okMem.memoryToApply == "Shared tavern spark");
+
+        // 4. C2 & H2: Review modal & Intrigue Mode cheating badge gating
+        SettingsData st{};
+        st.matchmakingConfirmResults = true;
+        st.playerPartnerCheatingConfirmResults = false;
+        MARAS_CHECK(ShouldShowMatchmakingReviewModal(/*isPartnerAgency=*/false, /*skip=*/false, st));
+        MARAS_CHECK(!ShouldShowMatchmakingReviewModal(/*isPartnerAgency=*/false, /*skip=*/true, st));
+        MARAS_CHECK(!ShouldShowMatchmakingReviewModal(/*isPartnerAgency=*/true, /*skip=*/false, st));
+        MARAS_CHECK(!ShouldExposeMatchmakingCheatingBadge(/*isCheating=*/true, /*revealSecretsInUI=*/false));
+        MARAS_CHECK(ShouldExposeMatchmakingCheatingBadge(/*isCheating=*/true, /*revealSecretsInUI=*/true));
+
+        // 5. C5: ResolvePartnerAgencyCandidate prefers chosenCandidateIndex over name & respects usedCandidates
+        const std::vector<ShortlistCandidateRef> shortlist = {
+            { ActorId{ 0x101 }, "Faendal", "Town neighbor" },
+            { ActorId{ 0x102 }, "Mikael", "Tavern regular" },
+            { ActorId{ 0x103 }, "Sven", "Bard" }
+        };
+        std::unordered_set<ActorId> used{ ActorId{ 0x101 } };
+        const auto byIdx = ResolvePartnerAgencyCandidate(/*idx=*/2, "", shortlist, used);
+        MARAS_CHECK(byIdx.matchedByIndex && byIdx.actorId == ActorId{ 0x103 } && byIdx.name == "Sven");
+
+        const auto usedIdx = ResolvePartnerAgencyCandidate(/*idx=*/0, "Mikael", shortlist, used);
+        MARAS_CHECK(usedIdx.actorId.IsNull() && !usedIdx.needsExternalNameLookup);
+
+        const auto byName = ResolvePartnerAgencyCandidate(-1, "mikael", shortlist, used);
+        MARAS_CHECK(!byName.matchedByIndex && byName.actorId == ActorId{ 0x102 });
+
+        const auto extName = ResolvePartnerAgencyCandidate(-1, "Belethor", shortlist, used);
+        MARAS_CHECK(extName.actorId.IsNull() && extName.needsExternalNameLookup);
     }
 
 }  // namespace MARAS::Tests

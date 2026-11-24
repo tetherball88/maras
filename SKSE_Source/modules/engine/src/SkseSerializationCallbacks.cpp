@@ -186,6 +186,16 @@ namespace MARAS::Serialization {
         }
 
         auto* hooks = Engine::GetEngineEventHooks();
+        struct CoSaveLoadScopeGuard {
+            Engine::IEngineEventHooks* hooks{ nullptr };
+            bool finalized{ false };
+            ~CoSaveLoadScopeGuard() {
+                if (hooks && !finalized) {
+                    hooks->AbortCoSaveLoad();
+                }
+            }
+        };
+        CoSaveLoadScopeGuard loadGuard{ hooks, false };
         if (hooks) {
             hooks->BeginCoSaveLoad();
         }
@@ -214,6 +224,7 @@ namespace MARAS::Serialization {
         }
 
         if (hooks) {
+            loadGuard.finalized = true;
             hooks->FinalizeCoSaveLoad(loadedAny, report);
         }
 
@@ -236,6 +247,7 @@ namespace MARAS::Serialization {
         State::WorldStore::GetSingleton().Revert();
         PackageReconciler::GetSingleton().Revert();
         ChildVisualReconciler::GetSingleton().Revert();
+        SpatialWorldIndex::GetSingleton().ClearLoadedActors();
         IntimateThreadService::GetSingleton().ClearAll();
         ChildrenFleeService::GetSingleton().Reset();
         if (auto* dialogueSink = DialogueEventSink::GetSingleton()) {

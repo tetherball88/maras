@@ -61,7 +61,18 @@ namespace MARAS::Domain::Agency {
         OpenDateInHouse = 2,
         OpenDateLetter = 3,
         CheatingTalkingLetter = 4,
-        CheatingPhysicalLetter = 5
+        CheatingPhysicalLetter = 5,
+        CheatingTalkingInHouse = 6,
+        CheatingPhysicalInHouse = 7
+    };
+
+    struct HomeArrivalPartnerCandidate {
+        ActorId partnerId{};
+        LocationId nativeHomeLocationId{};
+        bool residesAtPlayerLocation{ false };
+        bool isPartnerInCurrentCell{ false };
+        bool isBusyInScene{ false };
+        std::vector<ActorId> ineligibleSideLovers{};
     };
 
     struct HomeArrivalPlan {
@@ -100,6 +111,7 @@ namespace MARAS::Domain::Agency {
         bool playerHomeHasTavernMarker,
         int currentHourOfDay,
         float currentGameDay,
-        Foundation::IRng& rng);
+        Foundation::IRng& rng,
+        const std::vector<HomeArrivalPartnerCandidate>& partnerCandidates = {});
 
 }  // namespace MARAS::Domain::Agency

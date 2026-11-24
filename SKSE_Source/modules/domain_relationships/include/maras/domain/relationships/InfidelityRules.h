@@ -42,6 +42,14 @@ namespace MARAS::Domain::Relationships {
         AffairStage recordedStage{ AffairStage::Physical };
     };
 
+    struct AffairStageUpdateOutcome {
+        bool updated{ false };
+        bool intentUpgraded{ false };
+        ActorId upgradedLover{};
+        std::vector<ActorId> updatedParamours{};
+        AffairStage appliedStage{ AffairStage::Physical };
+    };
+
     struct AffairDiscoveryEvent {
         ActorId cheater{};
         ActorId victim{};
@@ -92,6 +100,20 @@ namespace MARAS::Domain::Relationships {
         AffairStatus affairStatus,
         AffairStage affairStage,
         float currentGameDay);
+
+    AffairStageUpdateOutcome ApplySetAffairStage(
+        State::WorldState& ws,
+        ActorId cheater,
+        ActorId victim,
+        ActorId affairPartnerFilter,
+        AffairStage stage,
+        float currentGameDay);
+
+    [[nodiscard]] AffairStage GetEffectiveAffairStage(
+        const State::WorldStateSnapshot& snap,
+        ActorId cheater,
+        ActorId victim,
+        ActorId affairPartnerFilter) noexcept;
 
     ExposeAffairOutcome ApplyAffairDiscoveryOrResolution(
         State::WorldState& ws,

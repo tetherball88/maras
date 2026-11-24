@@ -33,14 +33,33 @@ namespace MARAS::Tests {
         const RefId markerA{ 0x00030010u };
         const RefId markerB{ 0x00030020u };
         const ActorId spouse{ 0x00031001u };
+        const ActorId exSpouse{ 0x00031002u };
+        const ActorId deadSpouse{ 0x00031003u };
         const ChildId sharedChild{ 0x00032001u };
         const ChildId otherChild{ 0x00032002u };
+        const ChildId soleChild{ 0x00032003u };
+        const ChildId widowChild{ 0x00032004u };
 
         MARAS_CHECK(ApplyRegisterHouse(ws, breezehome, markerA, true));
+        // Re-registering with null marker preserves existing markerA
+        MARAS_CHECK(ApplyRegisterHouse(ws, breezehome, RefId{}, false));
+        MARAS_CHECK_EQ(ws.household.Read().FindHouse(breezehome)->markerId, markerA);
         MARAS_CHECK(ApplyRegisterHouse(ws, proudspire, markerB, true));
+        ws.relationships.Write().GetOrCreateEdge(ActorId::Player(), spouse).status = RelationshipStatus::Married;
+        ws.relationships.Write().GetOrCreateEdge(ActorId::Player(), exSpouse).status = RelationshipStatus::Divorced;
+        ws.relationships.Write().GetOrCreateEdge(ActorId::Player(), deadSpouse).status = RelationshipStatus::Married;
+        {
+            DeceasedActorRecord deadRec{};
+            deadRec.refId = deadSpouse.AsRefId();
+            deadRec.baseId = BaseId{ deadSpouse.raw() };
+            deadRec.deathTimestamp = 3.0f;
+            ws.deceased.Write().UpsertRecord(std::move(deadRec));
+        }
         MARAS_CHECK(ApplyRegisterTenant(ws, spouse.raw(), breezehome, true, false));
         MARAS_CHECK(ApplyRegisterTenant(ws, sharedChild.raw(), breezehome, true, true));
         MARAS_CHECK(ApplyRegisterTenant(ws, otherChild.raw(), breezehome, true, true));
+        MARAS_CHECK(ApplyRegisterTenant(ws, soleChild.raw(), breezehome, true, true));
+        MARAS_CHECK(ApplyRegisterTenant(ws, widowChild.raw(), breezehome, true, true));
 
         ChildRecord scRec{};
         scRec.childId = sharedChild;
@@ -51,13 +70,37 @@ namespace MARAS::Tests {
         ChildRecord ocRec{};
         ocRec.childId = otherChild;
         ocRec.stage = ChildStage::Child;
-        ocRec.guardians.Assign(ActorId::Player(), ActorId{ 0x00031002u });
+        ocRec.guardians.Assign(ActorId::Player(), exSpouse);
         ws.lineage.Write().UpsertChild(ocRec);
 
-        // Player-guarded child cannot be evicted as a standalone tenant
+        ChildRecord soleRec{};
+        soleRec.childId = soleChild;
+        soleRec.stage = ChildStage::Child;
+        soleRec.guardians.Assign(ActorId::Player(), ActorId{});
+        ws.lineage.Write().UpsertChild(soleRec);
+
+        ChildRecord widowRec{};
+        widowRec.childId = widowChild;
+        widowRec.stage = ChildStage::Child;
+        widowRec.guardians.Assign(ActorId::Player(), deadSpouse);
+        ws.lineage.Write().UpsertChild(widowRec);
+
+        // Child with living Married co-guardian is blocked; divorced / sole-player / deceased co-guardian children are eligible
         const auto eligChild = CanRemoveTenant(ws.Snapshot(), sharedChild.raw());
         MARAS_CHECK(eligChild.isChild);
         MARAS_CHECK(!eligChild.eligible);
+
+        const auto eligDivorcedChild = CanRemoveTenant(ws.Snapshot(), otherChild.raw());
+        MARAS_CHECK(eligDivorcedChild.isChild);
+        MARAS_CHECK(eligDivorcedChild.eligible);
+
+        const auto eligSoleChild = CanRemoveTenant(ws.Snapshot(), soleChild.raw());
+        MARAS_CHECK(eligSoleChild.isChild);
+        MARAS_CHECK(eligSoleChild.eligible);
+
+        const auto eligWidowChild = CanRemoveTenant(ws.Snapshot(), widowChild.raw());
+        MARAS_CHECK(eligWidowChild.isChild);
+        MARAS_CHECK(eligWidowChild.eligible);
 
         const auto eligSpouse = CanRemoveTenant(ws.Snapshot(), spouse.raw());
         MARAS_CHECK(!eligSpouse.isChild);
@@ -340,6 +383,22 @@ namespace MARAS::Tests {
         // Next tick after stayDurationDays (3.0) elapses for validLocArrival & validPosArrival -> both rotate
         const auto tick2 = EvaluateTravelTick(ws, 24.0f, spatial);
         MARAS_CHECK_EQ(tick2.childrenNeedingRotation.size(), std::size_t{ 3 });
+
+        // Busy adult child (player teammate / in combat / in scene / disabled) is skipped by EvaluateTravelTick
+        {
+            SpatialActorSnapshot busySpatial{};
+            busySpatial.Clear();
+            busySpatial.SetMetadata(25.0f, 2u);
+            LoadedActorSample teammateSample{ .refId = RefId{ validTimeout.raw() } };
+            teammateSample.SetFlag(LoadedActorFlags::IsPlayerTeammate, true);
+            busySpatial.AddSample(teammateSample);
+            busySpatial.FinalizeSortAndDedupe();
+            const auto busyTick = EvaluateTravelTick(ws, 25.0f, busySpatial);
+            MARAS_CHECK(std::find(
+                            busyTick.childrenNeedingRotation.begin(),
+                            busyTick.childrenNeedingRotation.end(),
+                            validTimeout) == busyTick.childrenNeedingRotation.end());
+        }
     }
 
     MARAS_TEST(DomainHousehold, TravelEligibilityAndUnassignedAdultDiscovery) {
@@ -724,6 +783,29 @@ namespace MARAS::Tests {
         const auto fb = PlanGenericForcegreetFallback(ws.Snapshot(), breezehome, 50.0f, rng);
         MARAS_CHECK(fb.eventNumber >= 10 && fb.eventNumber <= 13);
         MARAS_CHECK(fb.clearNameCallingUsedLast);
+
+        // Physical Stage 1 (BF Infant) is strictly excluded from forcegreet selection
+        {
+            WorldState infWs{};
+            const ChildId physInfant{ 0x0003B199u };
+            (void)ApplyRegisterHouse(infWs, breezehome, RefId{ 0x0003B002u }, true);
+            ChildRecord infRec{};
+            infRec.childId = physInfant;
+            infRec.stage = ChildStage::Infant;
+            infWs.lineage.Write().UpsertChild(infRec);
+            ChildHouseholdRecord infHh{};
+            infHh.childId = physInfant;
+            infHh.currentHouseId = breezehome;
+            infHh.isNewlyAdopted = true;
+            infWs.household.Write().UpsertChildState(infHh);
+
+            const auto infPlan = PlanReadyForcegreetEvent(infWs.Snapshot(), fgIn, rng);
+            MARAS_CHECK_EQ(infPlan.eventNumber, 0);
+            MARAS_CHECK(infPlan.eventChild.IsNull());
+            const auto infFb = PlanGenericForcegreetFallback(infWs.Snapshot(), breezehome, 50.0f, rng);
+            MARAS_CHECK_EQ(infFb.eventNumber, 0);
+            MARAS_CHECK(infFb.eventChild.IsNull());
+        }
 
         // Pet race suitability
         const std::vector<FormRawId> dogs{ FormRawId{ 0x000131F5u } };

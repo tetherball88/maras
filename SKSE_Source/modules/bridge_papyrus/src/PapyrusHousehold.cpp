@@ -45,13 +45,14 @@ namespace MARAS::PapyrusInterface {
     // ========================================
 
     bool RegisterPlayerHouseCell(RE::StaticFunctionTag*, RE::BGSLocation* loc, RE::TESObjectREFR* homeMarker) {
-        if (!loc || !homeMarker) {
-            MARAS_LOG_WARN("RegisterPlayerHouseCell: null location or marker provided");
+        if (!loc) {
+            MARAS_LOG_WARN("RegisterPlayerHouseCell: null location provided");
             return false;
         }
 
+        const RE::FormID markerId = homeMarker ? homeMarker->GetFormID() : 0;
         std::lock_guard<MARAS::PapyrusDomainMutex> lock(GetPapyrusMutex());
-        return App::HouseholdUseCases::GetSingleton().RegisterPlayerHouseCell(loc->GetFormID(), homeMarker->GetFormID());
+        return App::HouseholdUseCases::GetSingleton().RegisterPlayerHouseCell(loc->GetFormID(), markerId);
     }
 
     std::vector<RE::BGSLocation*> GetAllPlayerHouses(RE::StaticFunctionTag*) {
@@ -74,8 +75,14 @@ namespace MARAS::PapyrusInterface {
         }
 
         std::lock_guard<MARAS::PapyrusDomainMutex> lock(GetPapyrusMutex());
-        return App::HouseholdUseCases::GetSingleton().RegisterTenantInPlayerHouse(
-            spouse->GetFormID(), playerHouse->GetFormID(), stayAtHome);
+        auto& houseSvc = App::HouseholdUseCases::GetSingleton();
+        const auto res = houseSvc.RelocateFamilyUnit(
+            spouse->GetFormID(), playerHouse->GetFormID(), /*moveParents=*/true);
+        if (!res.empty()) {
+            houseSvc.SetTenantStayAtHome(spouse->GetFormID(), stayAtHome);
+            return true;
+        }
+        return false;
     }
 
     bool RemoveTenantFromPlayerHouse(RE::StaticFunctionTag*, RE::Actor* spouse) {

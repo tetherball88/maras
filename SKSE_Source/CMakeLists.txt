@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 3.21)
 
-project(MARAS VERSION 2.6.2 LANGUAGES CXX)
+project(MARAS VERSION 2.6.3 LANGUAGES CXX)
 
 set(MOD_FOLDER_NAME "M.A.R.A.S Dev")
 set(SKYRIM_MODS_FOLDER "E:\\Skyrim\\development\\mods")
@@ -47,6 +47,7 @@ add_library(maras_foundation STATIC
     modules/foundation/src/EnumUtils.cpp
     modules/foundation/src/LocalizationCatalog.cpp
     modules/foundation/src/Logging.cpp
+    modules/foundation/src/UIHostStateMachine.cpp
 )
 target_compile_features(maras_foundation PUBLIC cxx_std_23)
 target_compile_definitions(maras_foundation PUBLIC _SILENCE_STDEXT_ARR_ITERS_DEPRECATION_WARNING)
@@ -67,6 +68,8 @@ add_library(maras_state STATIC
     modules/state/src/WorldStore.cpp
     modules/state/src/CoSaveCodec.cpp
     modules/state/src/MigrationReportFormatter.cpp
+    modules/state/src/ModalQueueStateMachine.cpp
+    modules/state/src/SettingsKeyParser.cpp
     modules/state/src/SpatialActorSnapshot.cpp
     modules/state/src/EngineSyncPlan.cpp
     modules/state/src/SessionEpoch.cpp
@@ -148,6 +151,7 @@ target_precompile_headers(maras_domain_household REUSE_FROM maras_foundation)
 
 add_library(maras_domain_agency STATIC
     modules/domain_agency/src/MatchmakingRules.cpp
+    modules/domain_agency/src/MatchmakingValidationRules.cpp
     modules/domain_agency/src/NpcMatchmaker.cpp
     modules/domain_agency/src/PartnerAgencyEvaluator.cpp
     modules/domain_agency/src/EncounterTemplate.cpp
@@ -261,6 +265,7 @@ add_library(maras_app OBJECT
     modules/app/src/FertilityLifecycleCoordinator.cpp
     modules/app/src/HouseholdUseCases.cpp
     modules/app/src/LineageUseCases.cpp
+    modules/app/src/MatchmakingContextBuilder.cpp
     modules/app/src/MigrationDiagnosticsCoordinator.cpp
     modules/app/src/ModalTypes.cpp
     modules/app/src/PaternityWorkflowCoordinator.cpp
@@ -437,6 +442,7 @@ if(MARAS_BUILD_TESTS)
         tests/test_domain_household.cpp
         tests/test_domain_agency.cpp
         tests/test_localization.cpp
+        tests/test_ui_modal_settings.cpp
     )
     target_compile_features(maras_tests PRIVATE cxx_std_23)
     target_include_directories(maras_tests PRIVATE

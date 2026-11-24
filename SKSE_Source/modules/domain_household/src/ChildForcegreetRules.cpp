@@ -20,6 +20,12 @@ namespace MARAS::Domain::Household {
                 if (cid.IsNull() || cid.IsSynthetic()) {
                     continue;
                 }
+                if (snap.lineage) {
+                    if (const auto* rec = snap.lineage->FindChild(cid);
+                        rec != nullptr && rec->stage != Foundation::ChildStage::Child) {
+                        continue;
+                    }
+                }
                 const HouseId effectiveHouse = !st.currentHouseId.IsNull()
                                                    ? st.currentHouseId
                                                    : snap.household->GetTenantHouse(cid.raw());
@@ -29,6 +35,14 @@ namespace MARAS::Domain::Household {
             }
             std::sort(out.begin(), out.end());
             return out;
+        }
+
+        void ShuffleChildren(std::vector<ChildId>& candidates, Foundation::IRng& rng) noexcept {
+            for (std::size_t i = candidates.size(); i > 1; --i) {
+                const auto j = static_cast<std::size_t>(
+                    rng.NextInt(0, static_cast<std::int32_t>(i - 1)));
+                std::swap(candidates[i - 1], candidates[j]);
+            }
         }
 
     }  // namespace
@@ -51,19 +65,29 @@ namespace MARAS::Domain::Household {
         const bool chestIntroduced = snap.household->IsChildChestIntroduced();
 
         // EVENTS 1 & 2: Newly adopted child welcomes player home (with/without chest intro)
-        for (const ChildId cid : houseChildren) {
-            const auto* st = snap.household->FindChildState(cid);
-            if (st && st->isNewlyAdopted) {
-                plan.eventChild = cid;
-                plan.clearNewlyAdoptedForHouse = true;
-                plan.clearNameCallingUsedLast = nameCallingWasLast;
-                if (!chestIntroduced) {
-                    plan.eventNumber = 2;
-                    plan.markChestIntroduced = true;
-                } else {
-                    plan.eventNumber = 1;
+        {
+            std::vector<ChildId> newlyAdopted;
+            for (const ChildId cid : houseChildren) {
+                const auto* st = snap.household->FindChildState(cid);
+                if (st && st->isNewlyAdopted) {
+                    newlyAdopted.push_back(cid);
                 }
-                return plan;
+            }
+            if (!newlyAdopted.empty()) {
+                const ChildId chosen =
+                    Lineage::PickWeightedChild(snap, newlyAdopted, input.currentGameDays, rng);
+                if (!chosen.IsNull()) {
+                    plan.eventChild = chosen;
+                    plan.clearNewlyAdoptedForHouse = true;
+                    plan.clearNameCallingUsedLast = nameCallingWasLast;
+                    if (!chestIntroduced) {
+                        plan.eventNumber = 2;
+                        plan.markChestIntroduced = true;
+                    } else {
+                        plan.eventNumber = 1;
+                    }
+                    return plan;
+                }
             }
         }
 
@@ -83,12 +107,20 @@ namespace MARAS::Domain::Household {
         // EVENT 4: Adopt animal companion pet
         const bool globalPetBanned = snap.settings && snap.settings->bGlobalBanPet;
         if (input.hasAnimalCompanion && !globalPetBanned) {
+            std::vector<ChildId> petCandidates;
             for (const ChildId cid : houseChildren) {
                 const auto* st = snap.household->FindChildState(cid);
                 if (st && st->petId.IsNull() &&
                     !Lineage::IsPetBannedForChild(snap, cid, input.currentGameDays)) {
+                    petCandidates.push_back(cid);
+                }
+            }
+            if (!petCandidates.empty()) {
+                const ChildId chosen =
+                    Lineage::PickWeightedChild(snap, petCandidates, input.currentGameDays, rng);
+                if (!chosen.IsNull()) {
                     plan.eventNumber = 4;
-                    plan.eventChild = cid;
+                    plan.eventChild = chosen;
                     plan.clearNameCallingUsedLast = nameCallingWasLast;
                     return plan;
                 }
@@ -98,20 +130,23 @@ namespace MARAS::Domain::Household {
         // EVENT 5: Adopt wild critter
         const bool globalCritterBanned = snap.settings && snap.settings->bGlobalBanCritter;
         if (!globalCritterBanned) {
-            ChildId critterChild{};
+            std::vector<ChildId> critterCandidates;
             for (const ChildId cid : houseChildren) {
                 const auto* st = snap.household->FindChildState(cid);
                 if (st && st->critterId.IsNull() &&
                     !Lineage::IsCritterBannedForChild(snap, cid, input.currentGameDays)) {
-                    critterChild = cid;
-                    break;
+                    critterCandidates.push_back(cid);
                 }
             }
-            if (!critterChild.IsNull() && rng.NextInt(1, 100) < input.critterChance) {
-                plan.eventNumber = 5;
-                plan.eventChild = critterChild;
-                plan.clearNameCallingUsedLast = nameCallingWasLast;
-                return plan;
+            if (!critterCandidates.empty() && rng.NextInt(1, 100) < input.critterChance) {
+                const ChildId chosen =
+                    Lineage::PickWeightedChild(snap, critterCandidates, input.currentGameDays, rng);
+                if (!chosen.IsNull()) {
+                    plan.eventNumber = 5;
+                    plan.eventChild = chosen;
+                    plan.clearNameCallingUsedLast = nameCallingWasLast;
+                    return plan;
+                }
             }
         }
 
@@ -125,6 +160,9 @@ namespace MARAS::Domain::Household {
                 }
             }
             if (scene1Children.size() >= 2 && rng.NextInt(1, 100) < input.nameCallingChance) {
+                if (scene1Children.size() > 2) {
+                    ShuffleChildren(scene1Children, rng);
+                }
                 plan.eventNumber = 6;
                 plan.sceneChild1 = scene1Children[0];
                 plan.sceneChild2 = scene1Children[1];
@@ -139,6 +177,9 @@ namespace MARAS::Domain::Household {
                 }
             }
             if (scene2Children.size() >= 2 && rng.NextInt(1, 100) < input.nameCallingChance) {
+                if (scene2Children.size() > 2) {
+                    ShuffleChildren(scene2Children, rng);
+                }
                 plan.eventNumber = 7;
                 plan.sceneChild1 = scene2Children[0];
                 plan.sceneChild2 = scene2Children[1];

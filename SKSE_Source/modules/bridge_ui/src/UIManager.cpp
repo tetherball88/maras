@@ -15,12 +15,23 @@
 
 #include <filesystem>
 #include <memory>
-#include <thread>
 #include <utility>
 
 namespace MARAS::Bridge::Ui {
 
     namespace {
+
+        constexpr std::size_t kMaxPendingJsCalls = 64u;
+
+        [[nodiscard]] bool IsBlockingNativeMenuOpen() {
+            auto* ui = RE::UI::GetSingleton();
+            if (!ui) {
+                return true;
+            }
+            return ui->IsMenuOpen(RE::MainMenu::MENU_NAME) ||
+                   ui->IsMenuOpen(RE::LoadingMenu::MENU_NAME) ||
+                   ui->IsMenuOpen(RE::RaceSexMenu::MENU_NAME);
+        }
 
         [[nodiscard]] std::string GetDashboardHtmlPath() {
             wchar_t buf[MAX_PATH]{};
@@ -76,6 +87,10 @@ namespace MARAS::Bridge::Ui {
     }
 
     void UIManager::Initialize() {
+        if (renderDead_.load(std::memory_order_acquire)) {
+            MARAS_LOG_WARN("[UIManager] Skipping Initialize after Magelight RenderDead");
+            return;
+        }
         if (IsInitialized()) {
             return;
         }
@@ -117,7 +132,9 @@ namespace MARAS::Bridge::Ui {
         }
 
         isDomReady_.store(false, std::memory_order_release);
-        isViewShown_.store(false, std::memory_order_release);
+        domReadyBootstrapped_.store(false, std::memory_order_release);
+        modeState_.ResetOnViewDestroyedOrRenderDead();
+        SyncModeAtomicMirrors();
 
         const std::string pagePath = GetDashboardHtmlPath();
 
@@ -199,38 +216,52 @@ namespace MARAS::Bridge::Ui {
     }
 
     void UIManager::OnNewGameStarted(bool deferInitialScan) {
+        deferModalsUntilRaceMenuClosed_.store(true, std::memory_order_release);
         pendingNewGameInitialScan_.store(deferInitialScan, std::memory_order_release);
-        awaitingInitialNewGameLoadScreenClose_.store(true, std::memory_order_release);
-        MARAS_LOG_INFO("[UIManager] OnNewGameStarted (deferInitialScan={})", deferInitialScan);
-
-        if (auto* ui = RE::UI::GetSingleton(); ui && !ui->IsMenuOpen(RE::LoadingMenu::MENU_NAME)) {
-            TryRunPendingNewGameScan();
-        }
+        MARAS_LOG_INFO(
+            "[UIManager] OnNewGameStarted: deferring modals and initial scan (deferInitialScan={}) until RaceSexMenu closes",
+            deferInitialScan);
     }
 
     void UIManager::ResetNewGameDeferral() {
+        deferModalsUntilRaceMenuClosed_.store(false, std::memory_order_release);
         pendingNewGameInitialScan_.store(false, std::memory_order_release);
-        awaitingInitialNewGameLoadScreenClose_.store(false, std::memory_order_release);
     }
 
     void UIManager::TryRunPendingNewGameScan() {
-        if (!awaitingInitialNewGameLoadScreenClose_.exchange(false, std::memory_order_acq_rel)) {
+        if (!pendingNewGameInitialScan_.load(std::memory_order_acquire) || IsModalDisplayBlocked()) {
             return;
         }
+
+        std::lock_guard lock(MARAS::GetPapyrusMutex());
         if (!pendingNewGameInitialScan_.exchange(false, std::memory_order_acq_rel)) {
             return;
         }
 
+        const auto settingsSnap = App::SettingsCoordinator::GetSingleton().Snapshot();
+        if (settingsSnap && settingsSnap->initialRelationshipScanDone) {
+            return;
+        }
+
         MARAS_LOG_INFO("[UIManager] Running deferred initial new-game relationship scan");
-        App::RelationshipUseCases::GetSingleton().ScanExistingRelationships(/*isNewGame=*/true);
+        auto& relUseCases = App::RelationshipUseCases::GetSingleton();
+        relUseCases.ScanExistingRelationships(/*isNewGame=*/true);
         State::WorldStore::GetSingleton().Modify([](State::WorldState& ws) {
             ws.settings.Write().initialRelationshipScanDone = true;
         });
+        relUseCases.LogStatistics();
+    }
+
+    void UIManager::SyncModeAtomicMirrors() noexcept {
+        focusOwned_.store(modeState_.IsFocusOwned(), std::memory_order_release);
+        uiModeRequested_.store(modeState_.IsUIModeRequested(), std::memory_order_release);
     }
 
     void UIManager::Revert() {
         isVisible_.store(false, std::memory_order_release);
         pendingShowAfterCreate_.store(false, std::memory_order_release);
+        openDashboardAfterJournalClose_.store(false, std::memory_order_release);
+        modeState_.ResetModalRefuseRetries();
         ResetNewGameDeferral();
 
         {
@@ -240,16 +271,57 @@ namespace MARAS::Bridge::Ui {
         }
 
         if (isDomReady_.load(std::memory_order_acquire)) {
-            SendToUI("closeMARASView", "");
+            // Pass "true" so React discards pending debounced Save A edits and resets session state.
+            SendToUI("closeMARASView", "true");
         }
 
         SyncViewVisibilityAndFocus();
     }
 
     void UIManager::Show() {
+        if (!DeferredActorResolver::GetSingleton().IsOnMainThread()) {
+            AddCurrentEpochTask("UIManager::Show", [this]() {
+                std::lock_guard lock(MARAS::GetPapyrusMutex());
+                ShowOnMainThread();
+            });
+            return;
+        }
+        ShowOnMainThread();
+    }
+
+    void UIManager::ShowOnMainThread() {
+        if (renderDead_.load(std::memory_order_acquire)) {
+            MARAS_LOG_WARN("[UIManager] Show ignored after Magelight RenderDead");
+            return;
+        }
+
+        if (IsBlockingNativeMenuOpen()) {
+            MARAS_LOG_INFO("[UIManager] Show ignored while blocking native menu is open");
+            return;
+        }
+
+        if (auto* ui = RE::UI::GetSingleton(); ui && ui->IsMenuOpen(RE::JournalMenu::MENU_NAME)) {
+            MARAS_LOG_INFO("[UIManager] Show closing JournalMenu before opening Dashboard");
+            openDashboardAfterJournalClose_.store(true, std::memory_order_release);
+            if (auto* queue = RE::UIMessageQueue::GetSingleton()) {
+                queue->AddMessage(RE::JournalMenu::MENU_NAME, RE::UI_MESSAGE_TYPE::kHide, nullptr);
+                if (ui->IsMenuOpen(RE::TweenMenu::MENU_NAME)) {
+                    queue->AddMessage(RE::TweenMenu::MENU_NAME, RE::UI_MESSAGE_TYPE::kHide, nullptr);
+                }
+            }
+            return;
+        }
+
+        if (deferModalsUntilRaceMenuClosed_.exchange(false, std::memory_order_acq_rel)) {
+            TryRunPendingNewGameScan();
+        }
+
         if (!IsInitialized()) {
             pendingShowAfterCreate_.store(true, std::memory_order_release);
             Initialize();
+            if (!IsInitialized()) {
+                pendingShowAfterCreate_.store(false, std::memory_order_release);
+            }
             return;
         }
 
@@ -260,7 +332,7 @@ namespace MARAS::Bridge::Ui {
         }
 
         const auto settingsSnap = App::SettingsCoordinator::GetSingleton().Snapshot();
-        const bool defaultPause = settingsSnap ? settingsSnap->autoPauseOnOpen : false;
+        const bool defaultPause = settingsSnap ? settingsSnap->autoPauseOnOpen : true;
         isPaused_.store(defaultPause, std::memory_order_release);
         isVisible_.store(true, std::memory_order_release);
 
@@ -276,8 +348,20 @@ namespace MARAS::Bridge::Ui {
     }
 
     void UIManager::Hide() {
+        if (!DeferredActorResolver::GetSingleton().IsOnMainThread()) {
+            AddCurrentEpochTask("UIManager::Hide", [this]() {
+                std::lock_guard lock(MARAS::GetPapyrusMutex());
+                HideOnMainThread();
+            });
+            return;
+        }
+        HideOnMainThread();
+    }
+
+    void UIManager::HideOnMainThread() {
         isVisible_.store(false, std::memory_order_release);
         pendingShowAfterCreate_.store(false, std::memory_order_release);
+        openDashboardAfterJournalClose_.store(false, std::memory_order_release);
 
         if (isDomReady_.load(std::memory_order_acquire)) {
             SendToUI("closeMARASView", "");
@@ -301,6 +385,9 @@ namespace MARAS::Bridge::Ui {
     }
 
     bool UIManager::IsModalDisplayBlocked() const {
+        if (deferModalsUntilRaceMenuClosed_.load(std::memory_order_acquire)) {
+            return true;
+        }
         auto* ui = RE::UI::GetSingleton();
         if (!ui) {
             return true;
@@ -336,13 +423,11 @@ namespace MARAS::Bridge::Ui {
             }
         }
 
-        std::thread([fn]() {
-            if (auto* taskIF = SKSE::GetTaskInterface()) {
-                taskIF->AddTask([fn]() { UIManager::GameTaskTrampoline(fn); });
-            } else {
-                delete fn;
-            }
-        }).detach();
+        if (auto* taskIF = SKSE::GetTaskInterface()) {
+            taskIF->AddTask([fn]() { UIManager::GameTaskTrampoline(fn); });
+        } else {
+            delete fn;
+        }
     }
 
     void UIManager::GameTaskTrampoline(void* userData) {
@@ -354,14 +439,34 @@ namespace MARAS::Bridge::Ui {
         (*guard)();
     }
 
+    void UIManager::BootstrapDomReadyState() {
+        auto& bridge = UIDataBridge::GetSingleton();
+        bridge.SendLocaleDataOnMainThreadSafe();
+        bridge.SendSettingsDataOnMainThreadSafe();
+        FlushPendingAfterDomReady();
+
+        if (pendingShowAfterCreate_.exchange(false, std::memory_order_acq_rel)) {
+            ShowOnMainThread();
+        } else if (isVisible_.load(std::memory_order_acquire)) {
+            SendToUI("openMARAS", "");
+            SendToUI("onGamePausedChanged", BuildPauseChangedJson(IsDashboardPaused()));
+            bridge.RefreshDashboardOnOpen();
+        } else {
+            SendToUI("closeMARASView", "");
+        }
+
+        if (ModalManager::GetSingleton().HasActiveModal() && !IsModalDisplayBlocked()) {
+            ModalManager::GetSingleton().SendActiveModalToUI(/*forceResend=*/true);
+        }
+        SyncViewVisibilityAndFocus();
+    }
+
     void UIManager::OnUIReady() {
         if (!IsInitialized()) {
             return;
         }
 
         isDomReady_.store(true, std::memory_order_release);
-        FlushPendingAfterDomReady();
-        SyncViewVisibilityAndFocus();
 
         nlohmann::json statusData;
         statusData["status"] = "M.A.R.A.S Core Initialized";
@@ -369,16 +474,18 @@ namespace MARAS::Bridge::Ui {
             "receiveMARASStatus",
             statusData.dump(-1, ' ', false, nlohmann::json::error_handler_t::replace));
 
-        if (isVisible_.load(std::memory_order_acquire)) {
-            SendToUI("openMARAS", "");
-            SendToUI("onGamePausedChanged", BuildPauseChangedJson(IsDashboardPaused()));
-            UIDataBridge::GetSingleton().RefreshDashboardOnOpen();
-        } else {
-            SendToUI("closeMARASView", "");
+        if (!domReadyBootstrapped_.exchange(true, std::memory_order_acq_rel)) {
+            BootstrapDomReadyState();
+            return;
         }
 
-        if (ModalManager::GetSingleton().HasActiveModal() && !IsModalDisplayBlocked()) {
-            ModalManager::GetSingleton().SendActiveModalToUI(/*forceResend=*/true);
+        // ViewDomReady already performed initial locale/settings/modal bootstrap; only flush
+        // any newly queued calls or late pendingShowAfterCreate_ without double-pushing.
+        FlushPendingAfterDomReady();
+        if (pendingShowAfterCreate_.exchange(false, std::memory_order_acq_rel)) {
+            ShowOnMainThread();
+        } else {
+            SyncViewVisibilityAndFocus();
         }
     }
 
@@ -391,105 +498,89 @@ namespace MARAS::Bridge::Ui {
         const bool modalBlocked = IsModalDisplayBlocked();
         const bool modalActive = hasModal && !modalBlocked;
         const bool dashboardVisible = isVisible_.load(std::memory_order_acquire);
-
-        if (!modalActive && !dashboardVisible) {
-            ReleaseFocusAndUIMode();
-            return;
-        }
-
+        const bool wantActive = modalActive || dashboardVisible;
         const bool wantPause = modalActive ? true : isPaused_.load(std::memory_order_acquire);
-
-        if (!isViewShown_.exchange(true, std::memory_order_acq_rel)) {
-            magelight_->ShowView(view_, true);
-        }
-        magelight_->RaiseView(view_);
-
-        if (CapabilitySupported(magelight_, 2800, "escapecapture") && magelight_->SetEscapeCapture) {
-            magelight_->SetEscapeCapture(view_, true);
-        }
-
         const bool cancelSupported =
             CapabilitySupported(magelight_, 10100, "uimodecancel") && magelight_->CancelUIModeRequest;
 
-        if (focusOwned_.load(std::memory_order_acquire)) {
-            const bool needReclaim = releasePending_.load(std::memory_order_acquire);
-            const bool needPauseUpdate = (appliedPause_.load(std::memory_order_acquire) != wantPause);
-            if (needReclaim || needPauseUpdate) {
-                std::uint32_t flags =
-                    wantPause ? MAGELIGHT_API::kUIModeFlagPause : MAGELIGHT_API::kUIModeFlagNone;
-                if (needReclaim && cancelSupported) {
-                    flags |= MAGELIGHT_API::kUIModeFlagReclaim;
-                }
-                if (magelight_->RequestUIMode(view_, flags) == MAGELIGHT_API::Result::Ok) {
-                    appliedPause_.store(wantPause, std::memory_order_release);
-                    releasePending_.store(false, std::memory_order_release);
-                }
-            }
+        const auto plan = modeState_.PlanSync(wantActive, wantPause, cancelSupported);
+        SyncModeAtomicMirrors();
+
+        if (plan.releaseInstead) {
+            ReleaseFocusAndUIMode();
+            return;
+        }
+        if (plan.showView) {
+            magelight_->ShowView(view_, true);
+        }
+        if (plan.raiseView) {
+            magelight_->RaiseView(view_);
+        }
+        if (plan.setEscapeCapture && CapabilitySupported(magelight_, 2800, "escapecapture") &&
+            magelight_->SetEscapeCapture) {
+            magelight_->SetEscapeCapture(view_, true);
+        }
+        if (plan.waitForExitToResync || !plan.requestUIMode) {
             return;
         }
 
-        if (uiModeRequested_.load(std::memory_order_acquire)) {
-            if (appliedPause_.load(std::memory_order_acquire) != wantPause && cancelSupported &&
-                magelight_->CancelUIModeRequest(modHandle_) == MAGELIGHT_API::Result::Ok) {
-                uiModeRequested_.store(false, std::memory_order_release);
-            } else {
+        if (plan.cancelPendingRequestFirst) {
+            const bool cancelOk =
+                (magelight_->CancelUIModeRequest(modHandle_) == MAGELIGHT_API::Result::Ok);
+            const bool proceed = modeState_.OnCancelBeforeRequestResult(cancelOk);
+            SyncModeAtomicMirrors();
+            if (!proceed) {
                 return;
             }
         }
 
-        if (!uiModeRequested_.exchange(true, std::memory_order_acq_rel)) {
-            std::uint32_t flags =
-                wantPause ? MAGELIGHT_API::kUIModeFlagPause : MAGELIGHT_API::kUIModeFlagNone;
-            if (releasePending_.load(std::memory_order_acquire) && cancelSupported) {
-                flags |= MAGELIGHT_API::kUIModeFlagReclaim;
-            }
-            const auto res = magelight_->RequestUIMode(view_, flags);
-            if (res == MAGELIGHT_API::Result::Ok) {
-                appliedPause_.store(wantPause, std::memory_order_release);
-                releasePending_.store(false, std::memory_order_release);
-            } else {
-                uiModeRequested_.store(false, std::memory_order_release);
-                MARAS_LOG_WARN("[UIManager] RequestUIMode failed (result={})", static_cast<int>(res));
-            }
+        std::uint32_t flags =
+            plan.requestPause ? MAGELIGHT_API::kUIModeFlagPause : MAGELIGHT_API::kUIModeFlagNone;
+        if (plan.requestReclaim) {
+            flags |= MAGELIGHT_API::kUIModeFlagReclaim;
+        }
+        const auto res = magelight_->RequestUIMode(view_, flags);
+        const bool ok = (res == MAGELIGHT_API::Result::Ok);
+        modeState_.OnRequestUIModeResult(ok, plan.requestPause, plan.requestReclaim);
+        SyncModeAtomicMirrors();
+        if (!ok) {
+            MARAS_LOG_WARN("[UIManager] RequestUIMode failed (result={})", static_cast<int>(res));
         }
     }
 
     void UIManager::ReleaseFocusAndUIMode() {
-        if (!IsInitialized()) {
-            focusOwned_.store(false, std::memory_order_release);
-            uiModeRequested_.store(false, std::memory_order_release);
-            releasePending_.store(false, std::memory_order_release);
-            appliedPause_.store(false, std::memory_order_release);
-            isViewShown_.store(false, std::memory_order_release);
-            DrainAfterFocusReleasedTasks();
-            return;
-        }
-
-        if (uiModeRequested_.load(std::memory_order_acquire) &&
+        const bool initialized = IsInitialized();
+        const bool cancelSupported =
+            initialized &&
             CapabilitySupported(magelight_, 10100, "uimodecancel") &&
-            magelight_->CancelUIModeRequest) {
-            if (magelight_->CancelUIModeRequest(modHandle_) == MAGELIGHT_API::Result::Ok) {
-                uiModeRequested_.store(false, std::memory_order_release);
-            }
-        }
+            magelight_->CancelUIModeRequest;
 
-        if (isViewShown_.exchange(false, std::memory_order_acq_rel)) {
+        const auto plan = modeState_.PlanRelease(initialized, cancelSupported);
+        SyncModeAtomicMirrors();
+
+        if (plan.hideView && initialized) {
             magelight_->ShowView(view_, false);
         }
-
-        if (focusOwned_.load(std::memory_order_acquire) || uiModeRequested_.load(std::memory_order_acquire)) {
-            if (!releasePending_.exchange(true, std::memory_order_acq_rel)) {
-                const auto relRes = magelight_->ReleaseUIMode(modHandle_);
-                if (relRes != MAGELIGHT_API::Result::Ok) {
-                    releasePending_.store(false, std::memory_order_release);
-                    focusOwned_.store(false, std::memory_order_release);
-                    uiModeRequested_.store(false, std::memory_order_release);
-                    appliedPause_.store(false, std::memory_order_release);
-                    DrainAfterFocusReleasedTasks();
-                }
+        if (plan.cancelPendingRequest) {
+            const bool cancelOk =
+                (magelight_->CancelUIModeRequest(modHandle_) == MAGELIGHT_API::Result::Ok);
+            const bool shouldDrain = modeState_.OnCancelBeforeReleaseResult(cancelOk);
+            SyncModeAtomicMirrors();
+            if (shouldDrain) {
+                DrainAfterFocusReleasedTasks();
             }
-        } else {
-            appliedPause_.store(false, std::memory_order_release);
+            return;
+        }
+        if (plan.releaseUIMode) {
+            const auto relRes = magelight_->ReleaseUIMode(modHandle_);
+            const bool shouldDrain = modeState_.OnReleaseUIModeResult(relRes == MAGELIGHT_API::Result::Ok);
+            SyncModeAtomicMirrors();
+            if (shouldDrain) {
+                DrainAfterFocusReleasedTasks();
+            }
+            return;
+        }
+        if (plan.drainAfterFocusReleased) {
             DrainAfterFocusReleasedTasks();
         }
     }
@@ -510,9 +601,7 @@ namespace MARAS::Bridge::Ui {
     }
 
     void UIManager::DrainAfterFocusReleasedTasks() {
-        if (focusOwned_.load(std::memory_order_acquire) ||
-            uiModeRequested_.load(std::memory_order_acquire) ||
-            releasePending_.load(std::memory_order_acquire)) {
+        if (!modeState_.CanDrainAfterFocusReleased()) {
             return;
         }
 
@@ -533,8 +622,33 @@ namespace MARAS::Bridge::Ui {
     }
 
     void UIManager::SendToUI(const std::string& functionName, const std::string& jsonData) {
-        if (!magelight_ || view_ == 0 || !isDomReady_.load(std::memory_order_acquire)) {
+        if (renderDead_.load(std::memory_order_acquire) || !magelight_ || view_ == 0) {
+            return;
+        }
+
+        if (!isDomReady_.load(std::memory_order_acquire)) {
             std::lock_guard lock(stateMutex_);
+            const bool isCoalescable =
+                functionName == "receiveMARASOverview" ||
+                functionName == "receiveMARASLocale" ||
+                functionName == "receiveNPCList" ||
+                functionName == "receiveMARASStatus" ||
+                functionName == "showMARASModal" ||
+                functionName == "clearMARASModal" ||
+                functionName == "closeMARASView" ||
+                functionName == "openMARAS" ||
+                functionName == "onGamePausedChanged";
+            if (isCoalescable) {
+                for (auto& [fn, payload] : pendingJsCalls_) {
+                    if (fn == functionName) {
+                        payload = jsonData;
+                        return;
+                    }
+                }
+            }
+            if (pendingJsCalls_.size() >= kMaxPendingJsCalls) {
+                pendingJsCalls_.erase(pendingJsCalls_.begin());
+            }
             pendingJsCalls_.emplace_back(functionName, jsonData);
             return;
         }
@@ -581,24 +695,21 @@ namespace MARAS::Bridge::Ui {
                 self->isDomReady_.store(true, std::memory_order_release);
                 MARAS_LOG_INFO("[UIManager] DOM ready on Magelight view {}; listeners registered", ev->view);
 
-                UIDataBridge::GetSingleton().SendLocaleDataOnMainThreadSafe();
-                self->FlushPendingAfterDomReady();
-
-                if (self->pendingShowAfterCreate_.exchange(false, std::memory_order_acq_rel)) {
-                    self->Show();
+                if (!self->domReadyBootstrapped_.exchange(true, std::memory_order_acq_rel)) {
+                    self->BootstrapDomReadyState();
+                } else {
+                    self->FlushPendingAfterDomReady();
+                    self->SyncViewVisibilityAndFocus();
                 }
-                if (ModalManager::GetSingleton().HasActiveModal() && !self->IsModalDisplayBlocked()) {
-                    ModalManager::GetSingleton().SendActiveModalToUI(/*forceResend=*/true);
-                }
-                self->SyncViewVisibilityAndFocus();
                 break;
             }
 
             case MAGELIGHT_API::Event::ViewReloaded:
                 if (ev->view == self->view_) {
                     self->isDomReady_.store(true, std::memory_order_release);
+                    self->domReadyBootstrapped_.store(true, std::memory_order_release);
                     MARAS_LOG_INFO("[UIManager] Magelight view {} reloaded (DOM ready)", ev->view);
-                    UIDataBridge::GetSingleton().SendLocaleDataOnMainThreadSafe();
+                    self->BootstrapDomReadyState();
                 }
                 break;
 
@@ -607,6 +718,18 @@ namespace MARAS::Bridge::Ui {
                     "[UIManager] View {} load failed: {}",
                     ev->view,
                     ev->detail ? ev->detail : "");
+                if (ev->view == self->view_) {
+                    self->isDomReady_.store(false, std::memory_order_release);
+                    self->domReadyBootstrapped_.store(false, std::memory_order_release);
+                    self->isVisible_.store(false, std::memory_order_release);
+                    self->pendingShowAfterCreate_.store(false, std::memory_order_release);
+                    {
+                        std::lock_guard lock(self->stateMutex_);
+                        self->pendingJsCalls_.clear();
+                    }
+                    ModalManager::GetSingleton().AbortAllModals("ViewLoadFailed");
+                    self->ReleaseFocusAndUIMode();
+                }
                 break;
 
             case MAGELIGHT_API::Event::ViewDestroyed:
@@ -614,71 +737,107 @@ namespace MARAS::Bridge::Ui {
                     MARAS_LOG_INFO("[UIManager] Magelight view {} destroyed", ev->view);
                     self->view_ = 0;
                     self->isDomReady_.store(false, std::memory_order_release);
+                    self->domReadyBootstrapped_.store(false, std::memory_order_release);
                     self->isVisible_.store(false, std::memory_order_release);
-                    self->isViewShown_.store(false, std::memory_order_release);
-                    self->focusOwned_.store(false, std::memory_order_release);
-                    self->uiModeRequested_.store(false, std::memory_order_release);
-                    self->releasePending_.store(false, std::memory_order_release);
-                    self->appliedPause_.store(false, std::memory_order_release);
                     self->pendingShowAfterCreate_.store(false, std::memory_order_release);
+                    self->openDashboardAfterJournalClose_.store(false, std::memory_order_release);
+                    self->modeState_.ResetOnViewDestroyedOrRenderDead();
+                    self->SyncModeAtomicMirrors();
+                    {
+                        std::lock_guard lock(self->stateMutex_);
+                        self->pendingJsCalls_.clear();
+                    }
+                    ModalManager::GetSingleton().AbortAllModals("ViewDestroyed");
                     self->DrainAfterFocusReleasedTasks();
                 }
                 break;
 
             case MAGELIGHT_API::Event::UIModeEntered:
                 if (ev->view == self->view_) {
-                    self->uiModeRequested_.store(false, std::memory_order_release);
-                    self->releasePending_.store(false, std::memory_order_release);
-                    self->focusOwned_.store(true, std::memory_order_release);
-                    self->SyncViewVisibilityAndFocus();
+                    const bool modalActive =
+                        ModalManager::GetSingleton().HasActiveModal() && !self->IsModalDisplayBlocked();
+                    const bool shouldKeep = modalActive || self->isVisible_.load(std::memory_order_acquire);
+                    const auto action = self->modeState_.OnUIModeEntered(shouldKeep);
+                    self->SyncModeAtomicMirrors();
+                    if (action == Foundation::UIModeEnteredAction::ReleaseNow) {
+                        self->ReleaseFocusAndUIMode();
+                    } else {
+                        self->SyncViewVisibilityAndFocus();
+                    }
                 }
                 break;
 
             case MAGELIGHT_API::Event::UIModeExited: {
-                self->focusOwned_.store(false, std::memory_order_release);
-                self->uiModeRequested_.store(false, std::memory_order_release);
-                self->releasePending_.store(false, std::memory_order_release);
-                self->appliedPause_.store(false, std::memory_order_release);
-
                 const bool modalActive =
                     ModalManager::GetSingleton().HasActiveModal() && !self->IsModalDisplayBlocked();
-                if (!modalActive) {
-                    if (self->isVisible_.exchange(false, std::memory_order_acq_rel) &&
-                        self->isDomReady_.load(std::memory_order_acquire)) {
-                        self->SendToUI("closeMARASView", "");
-                    }
-                    if (self->isViewShown_.exchange(false, std::memory_order_acq_rel) &&
-                        self->IsInitialized()) {
-                        self->magelight_->ShowView(self->view_, false);
-                    }
+                const bool dashboardVisible = self->isVisible_.load(std::memory_order_acquire);
+                const auto plan = self->modeState_.OnUIModeExited(modalActive, dashboardVisible);
+                self->SyncModeAtomicMirrors();
+
+                if (plan.scheduleModalReacquire) {
+                    MARAS_LOG_INFO("[UIManager] UIModeExited while modal active; scheduling focus re-acquisition");
+                    AddCurrentEpochTask("UIManager::ReacquireModalFocus", [self]() {
+                        std::lock_guard lock(MARAS::GetPapyrusMutex());
+                        if (ModalManager::GetSingleton().HasActiveModal() &&
+                            !self->IsModalDisplayBlocked() &&
+                            !self->IsFocusOwned()) {
+                            self->SyncViewVisibilityAndFocus();
+                        }
+                    });
+                    break;
                 }
-                self->DrainAfterFocusReleasedTasks();
+                if (plan.resyncDashboard) {
+                    MARAS_LOG_DEBUG("[UIManager] UIModeExited finished prior release while dashboard open; re-syncing");
+                    self->SyncViewVisibilityAndFocus();
+                    break;
+                }
+                if (plan.closeDashboard && self->isVisible_.exchange(false, std::memory_order_acq_rel) &&
+                    self->isDomReady_.load(std::memory_order_acquire)) {
+                    self->SendToUI("closeMARASView", "");
+                }
+                if (plan.hideView && self->IsInitialized()) {
+                    self->magelight_->ShowView(self->view_, false);
+                }
+                if (plan.drainAfterFocusReleased) {
+                    self->DrainAfterFocusReleasedTasks();
+                }
                 break;
             }
 
             case MAGELIGHT_API::Event::UIModeRefused: {
-                self->uiModeRequested_.store(false, std::memory_order_release);
-                self->releasePending_.store(false, std::memory_order_release);
-                self->focusOwned_.store(false, std::memory_order_release);
-                self->appliedPause_.store(false, std::memory_order_release);
                 MARAS_LOG_WARN(
                     "[UIManager] UI mode refused for view {}: {}",
                     ev->view,
                     ev->detail ? ev->detail : "");
-
                 const bool modalActive =
                     ModalManager::GetSingleton().HasActiveModal() && !self->IsModalDisplayBlocked();
-                if (!modalActive) {
-                    if (self->isVisible_.exchange(false, std::memory_order_acq_rel) &&
-                        self->isDomReady_.load(std::memory_order_acquire)) {
-                        self->SendToUI("closeMARASView", "");
+                const bool dashboardVisible = self->isVisible_.load(std::memory_order_acquire);
+                const auto plan = self->modeState_.OnUIModeRefused(modalActive, dashboardVisible);
+                self->SyncModeAtomicMirrors();
+
+                if (modalActive) {
+                    if (plan.scheduleModalRetry) {
+                        AddCurrentEpochTask("UIManager::RetryModalFocusAfterRefused", [self]() {
+                            std::lock_guard lock(MARAS::GetPapyrusMutex());
+                            if (ModalManager::GetSingleton().HasActiveModal() &&
+                                !self->IsModalDisplayBlocked() &&
+                                !self->IsFocusOwned()) {
+                                self->SyncViewVisibilityAndFocus();
+                            }
+                        });
                     }
-                    if (self->isViewShown_.exchange(false, std::memory_order_acq_rel) &&
-                        self->IsInitialized()) {
-                        self->magelight_->ShowView(self->view_, false);
-                    }
+                    break;
                 }
-                self->DrainAfterFocusReleasedTasks();
+                if (plan.closeDashboard && self->isVisible_.exchange(false, std::memory_order_acq_rel) &&
+                    self->isDomReady_.load(std::memory_order_acquire)) {
+                    self->SendToUI("closeMARASView", "");
+                }
+                if (plan.hideView && self->IsInitialized()) {
+                    self->magelight_->ShowView(self->view_, false);
+                }
+                if (plan.drainAfterFocusReleased) {
+                    self->DrainAfterFocusReleasedTasks();
+                }
                 break;
             }
 
@@ -689,19 +848,21 @@ namespace MARAS::Bridge::Ui {
                 break;
 
             case MAGELIGHT_API::Event::RenderDead:
-                MARAS_LOG_ERROR("[UIManager] Magelight RenderDead event received; resetting UI state");
+                MARAS_LOG_ERROR("[UIManager] Magelight RenderDead event received; resetting UI state and aborting modals");
+                self->renderDead_.store(true, std::memory_order_release);
+                self->view_ = 0;
                 self->isVisible_.store(false, std::memory_order_release);
-                self->isViewShown_.store(false, std::memory_order_release);
-                self->focusOwned_.store(false, std::memory_order_release);
-                self->uiModeRequested_.store(false, std::memory_order_release);
-                self->releasePending_.store(false, std::memory_order_release);
-                self->appliedPause_.store(false, std::memory_order_release);
                 self->isDomReady_.store(false, std::memory_order_release);
+                self->domReadyBootstrapped_.store(false, std::memory_order_release);
                 self->pendingShowAfterCreate_.store(false, std::memory_order_release);
+                self->openDashboardAfterJournalClose_.store(false, std::memory_order_release);
+                self->modeState_.ResetOnViewDestroyedOrRenderDead();
+                self->SyncModeAtomicMirrors();
                 {
                     std::lock_guard lock(self->stateMutex_);
                     self->pendingJsCalls_.clear();
                 }
+                ModalManager::GetSingleton().AbortAllModals("RenderDead");
                 self->DrainAfterFocusReleasedTasks();
                 break;
 
@@ -739,7 +900,8 @@ namespace MARAS::Bridge::Ui {
             if (!MARAS::State::IsSessionEpochCurrent(expectedEpoch)) {
                 return;
             }
-            UIManager::GetSingleton().Hide();
+            std::lock_guard lock(MARAS::GetPapyrusMutex());
+            UIManager::GetSingleton().HideOnMainThread();
         });
     }
 
@@ -754,6 +916,7 @@ namespace MARAS::Bridge::Ui {
             return;
         }
         AddCurrentEpochTask("UIManager::HandleToggleHotkey", [this]() {
+            std::lock_guard lock(MARAS::GetPapyrusMutex());
             if (!IsDashboardToggleBlockedByGameState()) {
                 Toggle();
             }
@@ -763,7 +926,31 @@ namespace MARAS::Bridge::Ui {
     RE::BSEventNotifyControl UIManager::ProcessEvent(
         RE::InputEvent* const* a_event,
         RE::BSTEventSource<RE::InputEvent*>* /*a_eventSource*/) {
-        if (!a_event) {
+        if (!a_event || !*a_event) {
+            return RE::BSEventNotifyControl::kContinue;
+        }
+
+        // While a modal is active, block the dashboard toggle hotkey and recover focus if lost.
+        if (ModalManager::GetSingleton().HasActiveModal()) {
+            if (!focusOwned_.load(std::memory_order_acquire) &&
+                !uiModeRequested_.load(std::memory_order_acquire) &&
+                !IsModalDisplayBlocked() &&
+                IsInitialized() &&
+                isDomReady_.load(std::memory_order_acquire)) {
+                for (RE::InputEvent* event = *a_event; event != nullptr; event = event->next) {
+                    if (const auto* button = event->AsButtonEvent(); button && button->IsDown()) {
+                        AddCurrentEpochTask("UIManager::RestoreModalFocus", [this]() {
+                            std::lock_guard lock(MARAS::GetPapyrusMutex());
+                            if (ModalManager::GetSingleton().HasActiveModal() &&
+                                !IsModalDisplayBlocked() &&
+                                !IsFocusOwned()) {
+                                SyncViewVisibilityAndFocus();
+                            }
+                        });
+                        break;
+                    }
+                }
+            }
             return RE::BSEventNotifyControl::kContinue;
         }
 
@@ -791,13 +978,12 @@ namespace MARAS::Bridge::Ui {
                 continue;
             }
 
-            if (settingsSnap->toggleUIModCtrl && !IsModifierHeld(VK_CONTROL)) {
-                continue;
-            }
-            if (settingsSnap->toggleUIModShift && !IsModifierHeld(VK_SHIFT)) {
-                continue;
-            }
-            if (settingsSnap->toggleUIModAlt && !IsModifierHeld(VK_MENU)) {
+            const bool ctrlDown = IsModifierHeld(VK_CONTROL);
+            const bool shiftDown = IsModifierHeld(VK_SHIFT);
+            const bool altDown = IsModifierHeld(VK_MENU);
+            if (ctrlDown != settingsSnap->toggleUIModCtrl ||
+                shiftDown != settingsSnap->toggleUIModShift ||
+                altDown != settingsSnap->toggleUIModAlt) {
                 continue;
             }
 
@@ -814,10 +1000,29 @@ namespace MARAS::Bridge::Ui {
             return RE::BSEventNotifyControl::kContinue;
         }
 
-        if (a_event->menuName == RE::LoadingMenu::MENU_NAME && !a_event->opening) {
-            AddCurrentEpochTask("UIManager::LoadingMenuClosed", [this]() {
-                TryRunPendingNewGameScan();
+        if (!a_event->opening && a_event->menuName == RE::JournalMenu::MENU_NAME) {
+            AddCurrentEpochTask("UIManager::JournalMenuClosed", [this]() {
+                std::lock_guard lock(MARAS::GetPapyrusMutex());
+                if (openDashboardAfterJournalClose_.exchange(false, std::memory_order_acq_rel)) {
+                    ShowOnMainThread();
+                }
             });
+        }
+
+        const bool isRaceSexClosed = (!a_event->opening && a_event->menuName == RE::RaceSexMenu::MENU_NAME);
+        if (isRaceSexClosed || (!a_event->opening && a_event->menuName == RE::LoadingMenu::MENU_NAME)) {
+            AddCurrentEpochTask("UIManager::NewGameMenuClosed", [this, isRaceSexClosed]() {
+                std::lock_guard lock(MARAS::GetPapyrusMutex());
+                if (isRaceSexClosed && deferModalsUntilRaceMenuClosed_.exchange(false, std::memory_order_acq_rel)) {
+                    MARAS_LOG_INFO("[UIManager] RaceSexMenu closed — lifting new-game modal deferral");
+                }
+                TryRunPendingNewGameScan();
+                if (ModalManager::GetSingleton().HasActiveModal() && !IsModalDisplayBlocked()) {
+                    ModalManager::GetSingleton().SendActiveModalToUI(/*forceResend=*/false);
+                }
+                SyncViewVisibilityAndFocus();
+            });
+            return RE::BSEventNotifyControl::kContinue;
         }
 
         if (ModalManager::GetSingleton().HasActiveModal() ||
@@ -827,6 +1032,7 @@ namespace MARAS::Bridge::Ui {
             a_event->menuName == RE::RaceSexMenu::MENU_NAME ||
             a_event->menuName == "Pause Menu") {
             AddCurrentEpochTask("UIManager::MenuSync", [this]() {
+                std::lock_guard lock(MARAS::GetPapyrusMutex());
                 if (ModalManager::GetSingleton().HasActiveModal() && !IsModalDisplayBlocked()) {
                     ModalManager::GetSingleton().SendActiveModalToUI(/*forceResend=*/false);
                 }

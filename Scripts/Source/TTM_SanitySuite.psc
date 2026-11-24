@@ -151,6 +151,15 @@ Function SetupDynamicChildrenPreSave(Actor bioMother, Actor bioFather) global
     else
         MARAS.Log("[SanitySuite] ERROR: PlaceAtMe failed for SanityOrphanFF", 3)
     endif
+
+    ; 3. Synthetic Stage 3 Training child -> exercises SetChildTrainingLocation metadata & co-save round-trip
+    MARAS.RegisterUnbornChild(bioMother, bioFather, 7.0, false)
+    int traineeSynthId = MARAS.PromoteUnbornToInfant(bioMother, 8.0, "SanityTrainee", bioFather)
+    if traineeSynthId != 0
+        MARAS.SetChildTrainingLocation(traineeSynthId, "College of Winterhold")
+    else
+        MARAS.Log("[SanitySuite] ERROR: PromoteUnbornToInfant failed for SanityTrainee", 3)
+    endif
 EndFunction
 
 Function PrepEnvironment() global
@@ -277,6 +286,13 @@ Function RunScenario2() global
     MARAS.DumpStoredData("s2_omniscient")
     MARAS.SetSettingBool("revealSecretsInUI", false)
 
+    ; Caught-cheating discovery on a player spouse -> isSecret=false & SpouseCheatingFaction=1 even in Intrigue Mode
+    MARAS.RecordCheating(lydia, player, faendal, true)
+    MARAS.SetCheatingDiscovered(lydia, faendal, "caught", player)
+    MARAS.SetSettingBool("revealSecretsInUI", false)
+    MARAS.DumpStoredData("s2_caught")
+    MARAS.SetCheatingDiscovered(lydia, faendal, "forgiven", player)
+
     Debug.Notification("[MARAS Sanity] S2 Affairs & Intrigue dumps complete")
 EndFunction
 
@@ -359,9 +375,12 @@ Function RunScenario4PreSave() global
         MARAS.AssignChildToHouse(lucia, breezehomeLoc, false)
     endif
 
-    ; 1. Exercise FactionReconciler Hook_RemoveFromFaction detour: external PlayerMarriedFaction removal -> Divorced + Eviction
+    ; 1. Exercise FactionReconciler Hook_RemoveFromFaction detour on Rank-0 spouse:
+    ;    place Lydia at rank 0 & Ysolda at rank 1 so divorcing Lydia verifies rank-0 divorce hierarchy promotion (Ysolda 1 -> 0) + eviction
     if !MARAS.IsNPCStatusWith(lydia, player, "divorced")
         EnsurePlayerMarried(lydia)
+        MARAS.SetHierarchyRank(lydia, 0)
+        MARAS.SetHierarchyRank(ysolda, 1)
         Faction vanillaMarriedFaction = Game.GetFormFromFile(0x000C6472, "Skyrim.esm") as Faction
         if vanillaMarriedFaction
             lydia.RemoveFromFaction(vanillaMarriedFaction)
@@ -470,8 +489,90 @@ Function RunScenario4PostLoad() global
     Debug.Notification("[MARAS Sanity] S4 post-load & restore dumps complete!")
 EndFunction
 
+Function RunScenario5() global
+    ; Scenario 5: Vanilla Engagement & Wedding Quest Lifecycle (Rank-0 -> Stage 20 without BreakUp),
+    ; SkipWedding -> Married Transition, and Sole-Player Child Eviction (CanRemoveTenant)
+    bool prevSkipWedding = MARAS.GetSettingBool("skipWedding")
+    bool prevShouldPrompt = MARAS.ShouldPromptSkipWedding()
+    MARAS.SetEnablePolygamy(true)
+    MARAS.SetDisablePolygamyQuest(true)
+    MARAS.SetSettingBool("skipWedding", false)
+    MARAS.SetDontShowSkipWeddingMessage(true)
+
+    Actor player = Game.GetPlayer()
+    Location breezehomeLoc = EnsureBreezehomeRegistered()
+    Actor carlotta = PrepareActor(0x0001A675) ; Carlotta Valentia
+    Actor braith = PrepareActor(0x0001A66B) ; Braith
+
+    ; Ensure clean vanilla marriage quest & rank-0 starting relationship (reproduces rank-0 CHRR bug)
+    Quest mainMarr = TTM_Data.GetMarriageMainQuest()
+    if mainMarr && mainMarr.GetStage() >= 20
+        TTM_ServiceMarriageQuest.ResetMarriageQuests()
+    endif
+    ResetTestActor(carlotta)
+    if carlotta
+        carlotta.SetRelationshipRank(player, 0)
+        MARAS.RegisterCandidate(carlotta)
+        MARAS.PromoteNPCToStatus(carlotta, "engaged", true)
+        Debug.Notification("[MARAS Sanity] S5 waiting for vanilla wedding quest...")
+        int engTicks = 0
+        while engTicks < 10 && (!mainMarr || mainMarr.GetStage() < 20)
+            Utility.Wait(0.25)
+            engTicks += 1
+        endwhile
+        ; Settle briefly so any CHRR RelationshipMarriageBreakUp story event would surface if regressed
+        Utility.Wait(0.5)
+    endif
+
+    MARAS.SetSettingBool("revealSecretsInUI", false)
+    MARAS.DumpStoredData("s5_engaged")
+
+    if carlotta
+        MARAS.PromoteNPCToStatus(carlotta, "married", true)
+        int marTicks = 0
+        while marTicks < 12 && mainMarr && mainMarr.GetStage() >= 20
+            Utility.Wait(0.25)
+            marTicks += 1
+        endwhile
+        Utility.Wait(0.25)
+    endif
+    MARAS.DumpStoredData("s5_married")
+
+    ; Unregister Carlotta BEFORE Braith adoption so Player has no married lead spouse auto-assigned as co-guardian
+    if carlotta
+        ResetTestActor(carlotta)
+    endif
+    TTM_ServiceMarriageQuest.ResetMarriageQuests()
+
+    ; Sole-player child eviction check (CanRemoveTenant must allow evicting a child without a married co-guardian)
+    if braith && breezehomeLoc
+        MARAS.RemoveChild(braith)
+        MARAS.RegisterChildActor(braith, player, None, breezehomeLoc, None, None, 0, 2, false)
+        MARAS.AssignChildToHouse(braith, breezehomeLoc, false)
+        if MARAS.GetTenantHouse(braith) != breezehomeLoc
+            MARAS.Log("[SanitySuite] ERROR: S5 Braith was not assigned to Breezehome before eviction test", 3)
+        endif
+        if !MARAS.RemoveTenantFromPlayerHouse(braith)
+            MARAS.Log("[SanitySuite] ERROR: S5 RemoveTenantFromPlayerHouse(braith) returned false for sole-player child", 3)
+        endif
+    endif
+    MARAS.DumpStoredData("s5_child_ops")
+
+    ; Clean up S5 test actors & restore settings so S1 starts cleanly
+    if braith
+        MARAS.RemoveChild(braith)
+    endif
+    MARAS.SetSettingBool("skipWedding", prevSkipWedding)
+    if prevShouldPrompt
+        MARAS.SetDontShowSkipWeddingMessage(false)
+    endif
+
+    Debug.Notification("[MARAS Sanity] S5 Engagement & Child Ops complete")
+EndFunction
+
 Function RunAllPreSave() global
     PrepEnvironment()
+    RunScenario5()
     RunScenario1()
     RunScenario2()
     RunScenario3()

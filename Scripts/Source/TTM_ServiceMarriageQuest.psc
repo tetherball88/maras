@@ -18,17 +18,42 @@ scriptname TTM_ServiceMarriageQuest
 /;
 bool Function StartEngagement(Actor fiance) global
     TTM_Debug.trace("TTM_ServiceMarriageQuest:StartEngagement")
-
-    Quest main = TTM_Data.GetMarriageMainQuest()
-    ; Wedding quest in progress, try to re-start it when current wedding finished
-    if(main.IsRunning() && main.GetStage() >= 20)
+    if (!fiance)
         return false
     endif
 
-    ReferenceAlias fianceAl = main.GetAliasByName("LoveInterest") as ReferenceAlias
+    Quest main = TTM_Data.GetMarriageMainQuest()
+    ; If a previous engagement failed at stage 250 (RelationshipMarriageBreakUp),
+    ; reset the stuck quest so a new engagement can start cleanly.
+    if (main.IsRunning() && main.GetStage() >= 250)
+        ResetMarriageQuests()
+    endif
+    ; Wedding quest in progress, try to re-start it when current wedding finished
+    if (main.IsRunning() && main.GetStage() >= 20)
+        return false
+    endif
 
-    main.setStage(20)
+    ; Raise vanilla relationship rank BEFORE filling LoveInterest (which grants ALFC
+    ; MarriageCourtingFaction 0x0007431A) so CHRR cannot trigger RelationshipMarriageBreakUp.
+    Actor player = TTM_Data.GetPlayer()
+    bool removedCourting = false
+    Faction courtingFac = Game.GetFormFromFile(0x7431A, "Skyrim.esm") as Faction
+    if (fiance.GetRelationshipRank(player) < 3)
+        if (courtingFac && fiance.IsInFaction(courtingFac))
+            fiance.RemoveFromFaction(courtingFac)
+            removedCourting = true
+        endif
+        fiance.SetRelationshipRank(player, 3)
+        ; Allow Story Manager to drain CHRR before LoveInterest adds MarriageCourtingFaction
+        Utility.Wait(0.1)
+    endif
+
+    ReferenceAlias fianceAl = main.GetAliasByName("LoveInterest") as ReferenceAlias
     fianceAl.ForceRefTo(fiance)
+    if (removedCourting && courtingFac)
+        fiance.AddToFaction(courtingFac)
+    endif
+    main.SetStage(20)
 
     ReferenceAlias currentMarriageTarget = TTM_Data.GetMarasDialoguesQuest().GetAliasByName("CurrentMarriageTarget") as ReferenceAlias
     currentMarriageTarget.ForceRefTo(fiance)
@@ -51,7 +76,7 @@ Function ResetMarriageQuests(Actor npc = none, bool complete = false, bool fromO
         loveInterest = TTM_Utils.GetActorAlias(finMarr, "LoveInterest")
     endif
     if(npc && npc != loveInterest)
-        TTM_Debug.warn("TTM_ServiceMarriageQuest:ResetMarriageQuests:Skip - LoveInterest is different from target npc " + npcName)
+        TTM_Debug.debug("TTM_ServiceMarriageQuest:ResetMarriageQuests:Skip - LoveInterest is different from target npc " + npcName)
         return
     endif
     if(mainMarr.IsRunning() && !fromOnstop)
@@ -120,7 +145,9 @@ Function SkipWedding(Actor fiance) global
 
         ; this code is almost same as in original RelationshipMarriageWedding quest on stage 100 when player is officially married
         Game.AddAchievement(33)
-        loveInterest.SetRelationshipRank(player, 4)
+        if (loveInterest.GetRelationshipRank(player) < 4)
+            loveInterest.SetRelationshipRank(player, 4)
+        endif
 
         Armor matrimonyRing = TTM_Data.GetMatrimonyRingArmor()
         if(player.GetItemCount(matrimonyRing) == 0)

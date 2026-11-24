@@ -69,13 +69,26 @@ namespace MARAS::State {
         bool operator==(const RestoredSharedCellDelta&) const = default;
     };
 
+    struct HierarchyShiftDelta {
+        ActorId spouse{};
+        int oldRank{ 4 };
+        int newRank{ 4 };
+
+        [[nodiscard]] bool IsPromotion() const noexcept { return newRank < oldRank; }
+        [[nodiscard]] int RankDiff() const noexcept { return oldRank - newRank; }
+
+        bool operator==(const HierarchyShiftDelta&) const = default;
+    };
+
     struct WorldMutationResult {
         bool changed{ false };
+        bool hierarchyChanged{ false };
         std::vector<ActorId> dirtyActors{};
         std::vector<ChildId> dirtyChildren{};
         std::vector<ActorId> stoppedSharingSpouses{};
         std::vector<RestoredSharedCellDelta> restoredSharedCells{};
         std::vector<RefId> retiredSceneMarkers{};
+        std::vector<HierarchyShiftDelta> hierarchyShifts{};
 
         void MarkActorDirty(ActorId actor);
         void MarkChildDirty(ChildId child);

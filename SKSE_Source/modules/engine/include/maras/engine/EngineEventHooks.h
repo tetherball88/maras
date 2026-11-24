@@ -28,6 +28,7 @@ namespace MARAS::Engine {
 
         // SKSE Co-Save Lifecycle
         virtual void BeginCoSaveLoad() {}
+        virtual void AbortCoSaveLoad() noexcept {}
         virtual void FinalizeCoSaveLoad(
             bool loadedAny,
             const State::CoSaveLoadReport& report) {
@@ -76,6 +77,16 @@ namespace MARAS::Engine {
         }
         virtual void OnExternalMarriageFactionRemoved(RE::FormID actorId) { (void)actorId; }
         virtual void OnDialogueOpened(RE::FormID npcId) { (void)npcId; }
+        virtual bool OnRecordIntimateCheating(RE::FormID cheaterId,
+                                              RE::FormID victimId,
+                                              RE::FormID affairPartnerId,
+                                              bool isSecret) {
+            (void)cheaterId;
+            (void)victimId;
+            (void)affairPartnerId;
+            (void)isSecret;
+            return false;
+        }
         virtual void OnIntimateCheatingCaught(RE::FormID cheaterId,
                                               RE::FormID victimId,
                                               RE::FormID affairPartnerId,

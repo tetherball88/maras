@@ -52,6 +52,58 @@ namespace MARAS::Domain::Agency {
             return result;
         }
 
+        [[nodiscard]] std::vector<ActorId> CollectActiveNonPlayerLovers(
+            const State::WorldStateSnapshot& snap,
+            ActorId partnerId) {
+            std::vector<ActorId> result;
+            if (!snap.relationships) {
+                return result;
+            }
+            for (const auto& [otherId, st] : snap.relationships->GetActivePartners(partnerId)) {
+                if (st == RelationshipStatus::Lover && !otherId.IsNull() && !otherId.IsPlayer()) {
+                    if (!snap.deceased || !snap.deceased->IsDeceased(otherId)) {
+                        result.push_back(otherId);
+                    }
+                }
+            }
+            return result;
+        }
+
+        [[nodiscard]] float GetLatestNonBreakupStartDay(
+            const State::WorldStateSnapshot& snap,
+            ActorId a,
+            ActorId b) noexcept {
+            if (!snap.relationships) {
+                return -1.0f;
+            }
+            const auto* edge = snap.relationships->FindEdge(a, b);
+            if (!edge) {
+                return -1.0f;
+            }
+            for (auto it = edge->statusHistory.rbegin(); it != edge->statusHistory.rend(); ++it) {
+                if (!Foundation::IsBreakupStatus(it->toStatus) && it->timestamp >= 0.0f) {
+                    return it->timestamp;
+                }
+            }
+            return -1.0f;
+        }
+
+        [[nodiscard]] bool HasDiscoveredOngoingPlayerAffairAgainst(
+            const State::WorldStateSnapshot& snap,
+            ActorId partnerId) noexcept {
+            if (!snap.affairs) {
+                return false;
+            }
+            for (const auto& rec : snap.affairs->GetByCheater(ActorId::Player())) {
+                if (rec.deceivedPartner == partnerId &&
+                    rec.affairStatus == Foundation::AffairStatus::Ongoing &&
+                    !rec.isSecret) {
+                    return true;
+                }
+            }
+            return false;
+        }
+
         [[nodiscard]] float DaysSinceInteraction(
             const State::WorldStateSnapshot& snap,
             ActorId partnerId,
@@ -80,6 +132,10 @@ namespace MARAS::Domain::Agency {
                 chance += 20;
             }
             return std::clamp(chance, 0, 100);
+        }
+
+        [[nodiscard]] bool ContainsActor(const std::vector<ActorId>& list, ActorId id) noexcept {
+            return std::find(list.begin(), list.end(), id) != list.end();
         }
     }  // namespace
 
@@ -234,8 +290,6 @@ namespace MARAS::Domain::Agency {
         }
 
         const auto& settings = *snap.settings;
-        const bool playerCheatingRecently =
-            snap.affairs && !snap.affairs->GetByCheater(ActorId::Player()).empty();
         int totalPlayerMainPartners = 0;
         for (const auto& [pid, st] : snap.relationships->GetActivePartners(ActorId::Player())) {
             (void)pid;
@@ -243,6 +297,8 @@ namespace MARAS::Domain::Agency {
                 ++totalPlayerMainPartners;
             }
         }
+
+        const int maxSideLovers = std::clamp(settings.playerPartnerCheatingMaxSecretLovers, 1, 3);
 
         for (const auto& input : partners) {
             const ActorId partnerId = input.partnerId;
@@ -261,8 +317,18 @@ namespace MARAS::Domain::Agency {
             const float daysSince = DaysSinceInteraction(snap, partnerId, currentGameDay);
             const int sharedChildren = CountSharedChildren(snap, partnerId);
             const auto ongoingAffairs = CollectOngoingPlayerAffairsOf(snap, partnerId);
-            const int secretLoversCount = static_cast<int>(ongoingAffairs.size());
-            const int rank = snap.hierarchy ? snap.hierarchy->GetRank(partnerId) : 4;
+            const auto openLovers = edge->isOpen ? CollectActiveNonPlayerLovers(snap, partnerId) : std::vector<ActorId>{};
+            const int sideLoversCount = edge->isOpen
+                                            ? static_cast<int>(openLovers.size())
+                                            : static_cast<int>(ongoingAffairs.size());
+            // M6: Only Married spouses participate in the spouse hierarchy; Dating/Engaged have rank -1.
+            const int rank = (edge->status == RelationshipStatus::Married && snap.hierarchy)
+                                 ? snap.hierarchy->GetRank(partnerId)
+                                 : -1;
+            // H1.2: Revenge triggers ONLY for ongoing, non-secret player affairs against THIS partner.
+            const bool playerCheatedOnPartner =
+                settings.playerPartnerCheatingEnableRevenge &&
+                HasDiscoveredOngoingPlayerAffairAgainst(snap, partnerId);
 
             // Step 1: Check expired pending partner intent
             const auto pending = snap.relationships->GetPendingIntent(partnerId);
@@ -278,12 +344,10 @@ namespace MARAS::Domain::Agency {
                     plan.escalateTalkingToPhysical = true;
                     actions.push_back(plan);
                 } else if (pending.type == PartnerIntentType::SuggestOpen) {
-                    PartnerAgencyActionPlan plan{};
-                    plan.type = PartnerAgencyActionType::ExpiredIntentForceSuggestOpenAffair;
-                    plan.partnerId = partnerId;
-                    plan.forceCheatingFromExpiredSuggestOpen = true;
-                    actions.push_back(plan);
-                    forceCheatingFromExpiredSuggestOpen = true;
+                    // C6: Set flag so Action C emits exactly ONE ExpiredIntentForceSuggestOpenAffair (not two).
+                    if (!edge->isOpen && settings.playerPartnerCheatingAgencyEnabled) {
+                        forceCheatingFromExpiredSuggestOpen = true;
+                    }
                 } else if (pending.type == PartnerIntentType::SuggestClose) {
                     PartnerAgencyActionPlan plan{};
                     plan.type = PartnerAgencyActionType::ExpiredIntentSuggestClosePenalty;
@@ -293,16 +357,18 @@ namespace MARAS::Domain::Agency {
                 }
             }
 
-            // Step 2: Talking -> Physical escalation on ongoing affairs
-            for (const auto& affRec : ongoingAffairs) {
-                if (affRec.affairStage == AffairStage::Talking &&
-                    (currentGameDay - affRec.stageStartDay) >= settings.GetAffairTalkingEscalationDays()) {
-                    PartnerAgencyActionPlan esc{};
-                    esc.type = PartnerAgencyActionType::EscalateTalkingToPhysical;
-                    esc.partnerId = partnerId;
-                    esc.relatedLoverId = affRec.paramour;
-                    esc.escalateTalkingToPhysical = true;
-                    actions.push_back(esc);
+            // Step 2: Talking -> Physical escalation on ongoing affairs (M9: gated on cheating agency enabled)
+            if (!edge->isOpen && settings.playerPartnerCheatingAgencyEnabled) {
+                for (const auto& affRec : ongoingAffairs) {
+                    if (affRec.affairStage == AffairStage::Talking &&
+                        (currentGameDay - affRec.stageStartDay) >= settings.GetAffairTalkingEscalationDays()) {
+                        PartnerAgencyActionPlan esc{};
+                        esc.type = PartnerAgencyActionType::EscalateTalkingToPhysical;
+                        esc.partnerId = partnerId;
+                        esc.relatedLoverId = affRec.paramour;
+                        esc.escalateTalkingToPhysical = true;
+                        actions.push_back(esc);
+                    }
                 }
             }
 
@@ -311,57 +377,114 @@ namespace MARAS::Domain::Agency {
                 continue;
             }
 
-            // Action A: Closed affair breakup / 20% confess sub-roll
             const float multBreakupSetting = std::clamp(settings.playerPartnerAgencyBreakupChanceMultiplier, 0.0f, 3.0f);
-            bool brokeClosedAffair = false;
-            for (const auto& affRec : ongoingAffairs) {
-                if ((currentGameDay - affRec.stageStartDay) < settings.GetMinSideLoverAgeForBreakupDays()) {
-                    continue;
-                }
-                const float baseA = (aff >= 60) ? 14.0f : 6.0f;
-                const float multTempA = (temp == Temperament::Humble || temp == Temperament::Romantic) ? 1.35f : 0.85f;
-                const float multStageA = (affRec.affairStage == AffairStage::Talking) ? 1.40f : 0.85f;
-                const float pBreakup = std::clamp(baseA * multTempA * multStageA * multBreakupSetting, 0.0f, 75.0f);
-                if (rng.RollPercent(pBreakup)) {
-                    PartnerAgencyActionPlan p{};
-                    p.type = PartnerAgencyActionType::BreakupClosedAffairLover;
-                    p.partnerId = partnerId;
-                    p.relatedLoverId = affRec.paramour;
-                    p.rolledChance = pBreakup;
-                    if (settings.playerPartnerAgencyEnableForceGreets &&
+
+            // Action A (Closed Affair Breakup / Confess) & Action B (Open-Lover Breakup)
+            int activeSideLoversCount = sideLoversCount;
+            if (!edge->isOpen) {
+                // M9: Gate Action A on playerPartnerCheatingAgencyEnabled
+                if (settings.playerPartnerCheatingAgencyEnabled) {
+                    bool brokeClosedAffair = false;
+                    for (const auto& affRec : ongoingAffairs) {
+                        const float startDay = GetLatestNonBreakupStartDay(snap, partnerId, affRec.paramour);
+                        const float affairStart = (startDay >= 0.0f) ? startDay : affRec.stageStartDay;
+                        if (multBreakupSetting <= 0.0f ||
+                            (currentGameDay - affairStart) < settings.GetMinSideLoverAgeForBreakupDays()) {
+                            continue;
+                        }
+                        const float baseA = (aff >= 60) ? 14.0f : 6.0f;
+                        const float multTempA = (temp == Temperament::Humble || temp == Temperament::Romantic) ? 1.35f : 0.85f;
+                        const float multStageA = (affRec.affairStage == AffairStage::Talking) ? 1.40f : 0.85f;
+                        const float pBreakup = std::clamp(baseA * multTempA * multStageA * multBreakupSetting, 0.0f, 75.0f);
+                        if (pBreakup > 0.0f && rng.RollPercent(pBreakup)) {
+                            PartnerAgencyActionPlan p{};
+                            p.type = PartnerAgencyActionType::BreakupClosedAffairLover;
+                            p.partnerId = partnerId;
+                            p.relatedLoverId = affRec.paramour;
+                            p.rolledChance = pBreakup;
+                            if (settings.playerPartnerAgencyEnableForceGreets &&
+                                pending.type == PartnerIntentType::None &&
+                                (temp == Temperament::Humble || temp == Temperament::Romantic) &&
+                                aff >= 60 &&
+                                rng.RollPercent(20.0f)) {
+                                p.triggerConfessIntent = true;
+                            }
+                            actions.push_back(p);
+                            brokeClosedAffair = true;
+                            break;
+                        }
+                    }
+
+                    if (!brokeClosedAffair && !ongoingAffairs.empty() &&
+                        settings.playerPartnerAgencyEnableForceGreets &&
+                        pending.type == PartnerIntentType::None &&
                         (temp == Temperament::Humble || temp == Temperament::Romantic) &&
                         aff >= 60 &&
+                        daysSince <= settings.GetRecentEffortMaxDays() &&
                         rng.RollPercent(20.0f)) {
-                        p.triggerConfessIntent = true;
+                        PartnerAgencyActionPlan conf{};
+                        conf.type = PartnerAgencyActionType::ConfessAffairIntent;
+                        conf.partnerId = partnerId;
+                        conf.relatedLoverId = ongoingAffairs.front().paramour;
+                        conf.rolledChance = 20.0f;
+                        conf.triggerConfessIntent = true;
+                        actions.push_back(conf);
                     }
-                    actions.push_back(p);
-                    brokeClosedAffair = true;
-                    break;
                 }
-            }
-
-            if (!brokeClosedAffair && !ongoingAffairs.empty() &&
-                settings.playerPartnerAgencyEnableForceGreets &&
-                pending.type == PartnerIntentType::None &&
-                (temp == Temperament::Humble || temp == Temperament::Romantic) &&
-                aff >= 60 &&
-                daysSince <= settings.GetRecentEffortMaxDays() &&
-                rng.RollPercent(20.0f)) {
-                PartnerAgencyActionPlan conf{};
-                conf.type = PartnerAgencyActionType::ConfessAffairIntent;
-                conf.partnerId = partnerId;
-                conf.relatedLoverId = ongoingAffairs.front().paramour;
-                conf.rolledChance = 20.0f;
-                conf.triggerConfessIntent = true;
-                actions.push_back(conf);
+            } else if (settings.playerPartnerOpenRelAgencyEnabled) {
+                // H8: Action B — Open-relationship side-lover breakup roll (matching 0cebd663:1943-2023)
+                for (const ActorId loverId : openLovers) {
+                    const float startDay = GetLatestNonBreakupStartDay(snap, partnerId, loverId);
+                    const float flingAgeDays = (startDay >= 0.0f) ? std::max(0.0f, currentGameDay - startDay) : 0.0f;
+                    if (multBreakupSetting <= 0.0f || flingAgeDays < settings.GetMinSideLoverAgeForBreakupDays()) {
+                        continue;
+                    }
+                    const float baseFlingAge =
+                        (flingAgeDays <= settings.GetOpenFlingNoveltyDays())
+                            ? 8.0f
+                            : std::min(28.0f, 8.0f + (flingAgeDays - settings.GetOpenFlingNoveltyDays()) * 1.0f);
+                    const float bonusMultiLovers =
+                        (activeSideLoversCount >= 2) ? static_cast<float>(activeSideLoversCount - 1) * 8.0f : 0.0f;
+                    const float bonusPlayerDevotion =
+                        (aff >= 80 && daysSince <= settings.GetRecentEffortMaxDays()) ? 10.0f : 0.0f;
+                    float multTempB = 1.00f;
+                    switch (temp) {
+                        case Temperament::Independent:
+                            multTempB = 1.30f;
+                            break;
+                        case Temperament::Proud:
+                            multTempB = 1.15f;
+                            break;
+                        case Temperament::Romantic:
+                            multTempB = 0.75f;
+                            break;
+                        default:
+                            break;
+                    }
+                    const float pOpenBreakup = std::clamp(
+                        (baseFlingAge + bonusMultiLovers + bonusPlayerDevotion) * multTempB * multBreakupSetting,
+                        0.0f, 75.0f);
+                    if (pOpenBreakup > 0.0f && rng.RollPercent(pOpenBreakup)) {
+                        PartnerAgencyActionPlan br{};
+                        br.type = PartnerAgencyActionType::BreakupOpenLover;
+                        br.partnerId = partnerId;
+                        br.relatedLoverId = loverId;
+                        br.rolledChance = pOpenBreakup;
+                        actions.push_back(br);
+                        if (activeSideLoversCount > 0) {
+                            --activeSideLoversCount;
+                        }
+                    }
+                }
             }
 
             // Action E: SuggestOpen / SuggestClose forcegreet intents
             if (settings.playerPartnerAgencyEnableForceGreets &&
+                settings.playerPartnerOpenRelAgencyEnabled &&
                 pending.type == PartnerIntentType::None &&
                 !forceCheatingFromExpiredSuggestOpen &&
                 !IsNpcOnMatchmakingCooldown(snap, partnerId, currentGameDay)) {
-                if (!edge->isOpen && settings.playerPartnerOpenRelAgencyEnabled) {
+                if (!edge->isOpen && sideLoversCount == 0) {
                     float baseTempE1 = 0.0f;
                     if (temp == Temperament::Independent) baseTempE1 = 12.0f;
                     else if (temp == Temperament::Proud) baseTempE1 = (rank >= 1) ? 8.0f : 3.0f;
@@ -382,14 +505,14 @@ namespace MARAS::Domain::Agency {
                             actions.push_back(e1);
                         }
                     }
-                } else if (edge->isOpen) {
+                } else {
                     float baseTempE2 = 0.0f;
                     if (temp == Temperament::Jealous) baseTempE2 = 18.0f;
                     else if (temp == Temperament::Romantic) baseTempE2 = (aff >= 75) ? 12.0f : 5.0f;
                     else if (temp == Temperament::Humble) baseTempE2 = (aff >= 75) ? 8.0f : 2.0f;
                     else if (temp == Temperament::Proud) baseTempE2 = 4.0f;
                     if (baseTempE2 > 0.0f) {
-                        const float bonusNoSideE2 = (secretLoversCount == 0) ? 8.0f : 0.0f;
+                        const float bonusNoSideE2 = (sideLoversCount == 0) ? 8.0f : 0.0f;
                         const float bonusChildrenE2 = (sharedChildren > 0) ? 6.0f : 0.0f;
                         const float pSuggestClose = std::clamp(baseTempE2 + bonusNoSideE2 + bonusChildrenE2, 0.0f, 65.0f);
                         if (rng.RollPercent(pSuggestClose)) {
@@ -410,6 +533,7 @@ namespace MARAS::Domain::Agency {
             // Action D: Open-relationship partner seeks an open lover
             if (edge->isOpen) {
                 if (settings.playerPartnerOpenRelAgencyEnabled &&
+                    sideLoversCount < maxSideLovers &&
                     !IsNpcOnMatchmakingCooldown(snap, partnerId, currentGameDay)) {
                     float baseTempD = 8.0f;
                     switch (temp) {
@@ -430,7 +554,7 @@ namespace MARAS::Domain::Agency {
                     const float mitRecentVisitD =
                         (daysSince <= settings.GetOpenRecentVisitMitigationMaxDays()) ? 8.0f : 0.0f;
                     const float multExistingLovers =
-                        (secretLoversCount <= 0) ? 1.00f : ((secretLoversCount == 1) ? 0.45f : 0.20f);
+                        (sideLoversCount <= 0) ? 1.00f : ((sideLoversCount == 1) ? 0.45f : 0.20f);
                     const float multOpenSetting = std::clamp(settings.playerPartnerAgencyOpenLoverChanceMultiplier, 0.0f, 3.0f);
                     const float additiveOpen =
                         std::max(0.0f, baseTempD + bonusLonelinessD + bonusPolyParityD - mitChildrenD - mitRecentVisitD);
@@ -449,18 +573,20 @@ namespace MARAS::Domain::Agency {
 
             // Action C: Secret cheating temptation on exclusive main pair
             if (forceCheatingFromExpiredSuggestOpen) {
-                PartnerAgencyActionPlan forced{};
-                forced.type = PartnerAgencyActionType::SeekSecretAffair;
-                forced.partnerId = partnerId;
-                forced.rolledChance = 100.0f;
-                forced.forceCheatingFromExpiredSuggestOpen = true;
-                actions.push_back(forced);
+                if (sideLoversCount < maxSideLovers) {
+                    PartnerAgencyActionPlan forced{};
+                    forced.type = PartnerAgencyActionType::ExpiredIntentForceSuggestOpenAffair;
+                    forced.partnerId = partnerId;
+                    forced.rolledChance = 100.0f;
+                    forced.forceCheatingFromExpiredSuggestOpen = true;
+                    actions.push_back(forced);
+                }
                 continue;
             }
 
             if (IsPartnerAgencyCheatingAllowedByImmunities(snap, input, currentGameDay, false)) {
                 const float finalChance = ComputePartnerCheatingChance(
-                    snap, input, currentGameDay, secretLoversCount, sharedChildren, playerCheatingRecently, rank);
+                    snap, input, currentGameDay, sideLoversCount, sharedChildren, playerCheatedOnPartner, rank);
                 if (finalChance > 0.0f && rng.RollPercent(finalChance)) {
                     PartnerAgencyActionPlan cheatPlan{};
                     cheatPlan.type = PartnerAgencyActionType::SeekSecretAffair;
@@ -481,41 +607,129 @@ namespace MARAS::Domain::Agency {
         bool playerHomeHasTavernMarker,
         int currentHourOfDay,
         float currentGameDay,
-        Foundation::IRng& rng) {
+        Foundation::IRng& rng,
+        const std::vector<HomeArrivalPartnerCandidate>& partnerCandidates) {
         if (!snap.settings || !snap.relationships || !snap.actors) {
             return std::nullopt;
         }
         const auto& settings = *snap.settings;
+        if (!settings.playerPartnerCheatingAgencyEnabled && !settings.playerPartnerOpenRelAgencyEnabled) {
+            return std::nullopt;
+        }
+        if (!settings.playerPartnerAgencyEnableHomeArrivalEvents || playerLocationId.IsNull()) {
+            return std::nullopt;
+        }
+
         const auto* playerSample = spatial.Find(State::RefId::Player());
 
-        // Priority 1: Non-expired pending forcegreet intent for any loaded nearby partner
-        for (const auto& [partnerId, intent] : snap.relationships->AllPendingIntents()) {
-            if (intent.type == PartnerIntentType::None) {
-                continue;
+        struct ResidentEntry {
+            ActorId partnerId{};
+            bool partnerInCell{ false };
+            bool isBusyInScene{ false };
+            const std::vector<ActorId>* ineligibleSideLovers{ nullptr };
+        };
+
+        auto isSampleInPlayerCell = [&](ActorId partnerId) noexcept -> bool {
+            const auto* ps = spatial.Find(partnerId.AsRefId());
+            if (!ps || ps->IsDead() || ps->IsDisabled() || ps->IsDeleted()) {
+                return false;
             }
-            if (intent.createdGameDay >= 0.0f &&
-                (currentGameDay - intent.createdGameDay) >= settings.GetPartnerIntentTTLDays()) {
-                continue;
+            return playerSample && !playerSample->parentCellId.IsNull() &&
+                   ps->parentCellId == playerSample->parentCellId;
+        };
+
+        auto checkResidesAtPlayerLocation = [&](ActorId partnerId,
+                                                LocationId nativeHomeLocId,
+                                                bool explicitResides) noexcept -> bool {
+            const State::HouseId tenantHouse =
+                snap.household ? snap.household->GetTenantHouse(partnerId.raw()) : State::HouseId{};
+            if (!tenantHouse.IsNull()) {
+                return (tenantHouse.raw() == playerLocationId.raw()) || explicitResides;
             }
-            const auto* sample = spatial.Find(partnerId.AsRefId());
-            if (!sample || sample->IsDead() || sample->IsDisabled() || sample->IsDeleted()) {
-                continue;
+            return (!nativeHomeLocId.IsNull() && nativeHomeLocId == playerLocationId) || explicitResides;
+        };
+
+        std::vector<ResidentEntry> residents;
+        if (!partnerCandidates.empty()) {
+            residents.reserve(partnerCandidates.size());
+            for (const auto& cand : partnerCandidates) {
+                const ActorId pid = cand.partnerId;
+                if (pid.IsNull() || (snap.deceased && snap.deceased->IsDeceased(pid))) {
+                    continue;
+                }
+                const auto* edge = snap.relationships->FindEdge(ActorId::Player(), pid);
+                if (!edge || !Foundation::IsMainTierStatus(edge->status)) {
+                    continue;
+                }
+                if (!checkResidesAtPlayerLocation(pid, cand.nativeHomeLocationId, cand.residesAtPlayerLocation)) {
+                    continue;
+                }
+                residents.push_back(ResidentEntry{
+                    .partnerId = pid,
+                    .partnerInCell = cand.isPartnerInCurrentCell || isSampleInPlayerCell(pid),
+                    .isBusyInScene = cand.isBusyInScene,
+                    .ineligibleSideLovers = &cand.ineligibleSideLovers
+                });
             }
-            if (playerSample && !playerSample->parentCellId.IsNull() &&
-                sample->parentCellId == playerSample->parentCellId) {
-                const auto* prof = snap.actors->Find(partnerId.AsRefId());
+        } else {
+            for (const auto& [pid, st] : snap.relationships->GetActivePartners(ActorId::Player())) {
+                if (!Foundation::IsMainTierStatus(st)) {
+                    continue;
+                }
+                if (snap.deceased && snap.deceased->IsDeceased(pid)) {
+                    continue;
+                }
+                if (!checkResidesAtPlayerLocation(pid, LocationId{}, false)) {
+                    continue;
+                }
+                residents.push_back(ResidentEntry{
+                    .partnerId = pid,
+                    .partnerInCell = isSampleInPlayerCell(pid),
+                    .isBusyInScene = false,
+                    .ineligibleSideLovers = nullptr
+                });
+            }
+        }
+
+        if (residents.empty()) {
+            return std::nullopt;
+        }
+
+        // Priority 1: Non-expired pending forcegreet intent for any resident partner present in the arrived cell
+        if (settings.playerPartnerAgencyEnableForceGreets) {
+            for (const auto& res : residents) {
+                const auto intent = snap.relationships->GetPendingIntent(res.partnerId);
+                if (intent.type == PartnerIntentType::None) {
+                    continue;
+                }
+                if (intent.createdGameDay >= 0.0f &&
+                    (currentGameDay - intent.createdGameDay) >= settings.GetPartnerIntentTTLDays()) {
+                    continue;
+                }
+                const bool intentAllowed = [&]() noexcept {
+                    switch (intent.type) {
+                        case PartnerIntentType::SuggestOpen:
+                        case PartnerIntentType::SuggestClose:
+                            return settings.playerPartnerOpenRelAgencyEnabled;
+                        case PartnerIntentType::ConfessTalking:
+                        case PartnerIntentType::ConfessPhysical:
+                            return settings.playerPartnerCheatingAgencyEnabled;
+                        default:
+                            return false;
+                    }
+                }();
+                if (!intentAllowed || !res.partnerInCell) {
+                    continue;
+                }
+                const auto* prof = snap.actors->Find(res.partnerId.AsRefId());
                 return HomeArrivalPlan{
                     .kind = HomeArrivalKind::PendingIntentForcegreet,
-                    .partnerId = partnerId,
+                    .partnerId = res.partnerId,
                     .relatedLoverId = intent.relatedLover,
                     .intentType = intent.type,
                     .partnerTemperament = prof ? prof->temperament : Temperament::Proud
                 };
             }
-        }
-
-        if (!settings.playerPartnerAgencyEnableHomeArrivalEvents || playerLocationId.IsNull()) {
-            return std::nullopt;
         }
 
         // Priority 2: Home arrival cooldown check per LocationId
@@ -529,11 +743,56 @@ namespace MARAS::Domain::Agency {
         }
 
         const float lonelinessStart = settings.GetLonelinessDecayStartDays();
-        for (const auto& [partnerId, st] : snap.relationships->GetActivePartners(ActorId::Player())) {
-            if (!Foundation::IsMainTierStatus(st)) {
+        for (const auto& res : residents) {
+            if (res.isBusyInScene) {
                 continue;
             }
-            if (snap.deceased && snap.deceased->IsDeceased(partnerId)) {
+            const ActorId partnerId = res.partnerId;
+            const auto* edge = snap.relationships->FindEdge(ActorId::Player(), partnerId);
+            if (!edge) {
+                continue;
+            }
+
+            if (edge->isOpen && !settings.playerPartnerOpenRelAgencyEnabled) {
+                continue;
+            }
+            if (!edge->isOpen && !settings.playerPartnerCheatingAgencyEnabled) {
+                continue;
+            }
+
+            auto isEligibleLover = [&](ActorId lid) noexcept {
+                if (lid.IsNull() || lid.IsPlayer()) {
+                    return false;
+                }
+                if (snap.deceased && snap.deceased->IsDeceased(lid)) {
+                    return false;
+                }
+                if (res.ineligibleSideLovers && ContainsActor(*res.ineligibleSideLovers, lid)) {
+                    return false;
+                }
+                return true;
+            };
+
+            ActorId activeLoverId{};
+            AffairStage activeStage = AffairStage::Physical;
+            if (edge->isOpen) {
+                for (const auto& [otherId, st] : snap.relationships->GetActivePartners(partnerId)) {
+                    if (st == RelationshipStatus::Lover && isEligibleLover(otherId)) {
+                        activeLoverId = otherId;
+                        break;
+                    }
+                }
+            } else {
+                for (const auto& aff : CollectOngoingPlayerAffairsOf(snap, partnerId)) {
+                    if (isEligibleLover(aff.paramour)) {
+                        activeLoverId = aff.paramour;
+                        activeStage = aff.affairStage;
+                        break;
+                    }
+                }
+            }
+
+            if (activeLoverId.IsNull()) {
                 continue;
             }
 
@@ -543,35 +802,31 @@ namespace MARAS::Domain::Agency {
                 continue;
             }
 
+            bool isLetterScenario = res.partnerInCell ? rng.RollPercent(50.0f) : true;
+            if (isLetterScenario && !playerHomeHasTavernMarker) {
+                if (!res.partnerInCell) {
+                    continue;
+                }
+                isLetterScenario = false;
+            }
+
+            HomeArrivalKind kind = HomeArrivalKind::None;
+            if (edge->isOpen) {
+                kind = isLetterScenario ? HomeArrivalKind::OpenDateLetter : HomeArrivalKind::OpenDateInHouse;
+            } else if (activeStage == AffairStage::Talking) {
+                kind = isLetterScenario ? HomeArrivalKind::CheatingTalkingLetter : HomeArrivalKind::CheatingTalkingInHouse;
+            } else {
+                kind = isLetterScenario ? HomeArrivalKind::CheatingPhysicalLetter : HomeArrivalKind::CheatingPhysicalInHouse;
+            }
+
             const auto* prof = snap.actors->Find(partnerId.AsRefId());
             const Temperament temp = prof ? prof->temperament : Temperament::Proud;
-            const bool partnerInCell = [&]() {
-                const auto* ps = spatial.Find(partnerId.AsRefId());
-                return ps && playerSample && ps->parentCellId == playerSample->parentCellId && !ps->IsDead();
-            }();
-
-            const auto* edge = snap.relationships->FindEdge(ActorId::Player(), partnerId);
-            if (edge && edge->isOpen) {
-                const bool preferLetter = !partnerInCell || (playerHomeHasTavernMarker && rng.RollPercent(50.0f));
-                return HomeArrivalPlan{
-                    .kind = preferLetter ? HomeArrivalKind::OpenDateLetter : HomeArrivalKind::OpenDateInHouse,
-                    .partnerId = partnerId,
-                    .partnerTemperament = temp
-                };
-            }
-
-            const auto affairs = CollectOngoingPlayerAffairsOf(snap, partnerId);
-            if (!affairs.empty()) {
-                const auto& aff = affairs.front();
-                return HomeArrivalPlan{
-                    .kind = (aff.affairStage == AffairStage::Talking)
-                                ? HomeArrivalKind::CheatingTalkingLetter
-                                : HomeArrivalKind::CheatingPhysicalLetter,
-                    .partnerId = partnerId,
-                    .relatedLoverId = aff.paramour,
-                    .partnerTemperament = temp
-                };
-            }
+            return HomeArrivalPlan{
+                .kind = kind,
+                .partnerId = partnerId,
+                .relatedLoverId = activeLoverId,
+                .partnerTemperament = temp
+            };
         }
 
         return std::nullopt;

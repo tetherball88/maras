@@ -1,6 +1,7 @@
 #pragma once
 
 #include "maras/bridge_ui/MagelightUI_API.h"
+#include "maras/foundation/UIHostStateMachine.h"
 
 #include <RE/Skyrim.h>
 
@@ -102,28 +103,33 @@ namespace MARAS::Bridge::Ui {
         static void OnLogFromUI(const char* argument);
         static void GameTaskTrampoline(void* userData);
 
+        void ShowOnMainThread();
+        void HideOnMainThread();
+        void BootstrapDomReadyState();
         void HandleToggleHotkey();
         void ReleaseFocusAndUIMode();
         void DrainAfterFocusReleasedTasks();
         void FlushPendingAfterDomReady();
+        void SyncModeAtomicMirrors() noexcept;
 
         const MAGELIGHT_API::MagelightApi4* magelight_{ nullptr };
         MAGELIGHT_API::ModId modHandle_{ 0 };
         MAGELIGHT_API::ViewId view_{ 0 };
 
+        MARAS::Foundation::UIHostStateMachine modeState_;
+        std::atomic<bool> renderDead_{ false };
         std::atomic<bool> isVisible_{ false };
-        std::atomic<bool> isViewShown_{ false };
         std::atomic<bool> focusOwned_{ false };
         std::atomic<bool> uiModeRequested_{ false };
-        std::atomic<bool> releasePending_{ false };
-        std::atomic<bool> appliedPause_{ false };
         std::atomic<bool> isDomReady_{ false };
+        std::atomic<bool> domReadyBootstrapped_{ false };
         std::atomic<bool> isPaused_{ true };
         std::atomic<bool> inputSinkRegistered_{ false };
         std::atomic<bool> menuSinkRegistered_{ false };
         std::atomic<bool> pendingShowAfterCreate_{ false };
+        std::atomic<bool> openDashboardAfterJournalClose_{ false };
+        std::atomic<bool> deferModalsUntilRaceMenuClosed_{ false };
         std::atomic<bool> pendingNewGameInitialScan_{ false };
-        std::atomic<bool> awaitingInitialNewGameLoadScreenClose_{ false };
 
         mutable std::mutex stateMutex_;
         std::vector<std::function<void()>> afterFocusReleasedTasks_;

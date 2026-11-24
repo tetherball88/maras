@@ -467,6 +467,10 @@ namespace MARAS::App {
             PlayerChildrenEngineOps::GetSingleton().ApplyOrderOnActorFromWorld(cid.raw());
         }
 
+        if (!State::IsLegacyMigrationActive()) {
+            RollForcegreetForHousehold();
+        }
+
         CheckChildrenTrainingProgress(currentGameDay);
     }
 
@@ -509,7 +513,9 @@ namespace MARAS::App {
         }
         bool db01ActiveUncompleted = false;
         if (auto* db01 = FormCache::GetSingleton().GetDB01()) {
-            db01ActiveUncompleted = db01->IsActive() && !db01->IsCompleted();
+            db01ActiveUncompleted =
+                (db01->IsRunning() || (db01->GetCurrentStageID() > 0 && db01->GetCurrentStageID() < 200)) &&
+                !db01->IsCompleted();
         }
         return Domain::Lineage::IsChildBlockedFromAdoption(refId, baseId, db01ActiveUncompleted, outReason);
     }
@@ -672,15 +678,39 @@ namespace MARAS::App {
         if (!rec.guardians.slotB.IsNull()) {
             RelationshipUseCases::GetSingleton().EnsureRegistered(rec.guardians.slotB.raw());
         }
+        if (!rec.bioMother.IsNull() && !rec.bioMother.IsPlayer()) {
+            RelationshipUseCases::GetSingleton().EnsureRegistered(rec.bioMother.raw());
+        }
+        if (!rec.bioFather.IsNull() && !rec.bioFather.IsUnknownFather() && !rec.bioFather.IsPlayer()) {
+            RelationshipUseCases::GetSingleton().EnsureRegistered(rec.bioFather.raw());
+        }
+        if (!rec.presumedFather.IsNull() && !rec.presumedFather.IsPlayer()) {
+            RelationshipUseCases::GetSingleton().EnsureRegistered(rec.presumedFather.raw());
+        }
+
+        if (rec.savedRaceIndex > 9) {
+            std::uint8_t resolvedRace = ChildSpawnService::ResolveActorFMRRaceIndex(childID);
+            if (resolvedRace > 9 && !rec.bioMother.IsNull()) {
+                resolvedRace = ChildSpawnService::ResolveActorFMRRaceIndex(rec.bioMother.raw());
+            }
+            if (resolvedRace > 9 && !rec.bioFather.IsNull() && !rec.bioFather.IsUnknownFather()) {
+                resolvedRace = ChildSpawnService::ResolveActorFMRRaceIndex(rec.bioFather.raw());
+            }
+            if (resolvedRace <= 9) {
+                rec.savedRaceIndex = resolvedRace;
+            }
+        }
 
         // Capture werewolf status BEFORE WorldStore::Modify (engine queries stay outside lock)
-        if (!rec.beastbloodEvaluated &&
-            rec.stage != Foundation::ChildStage::Unborn &&
-            !IsSyntheticId(childID)) {
+        if (!rec.beastbloodEvaluated && rec.stage != Foundation::ChildStage::Unborn) {
             const bool motherWW = !rec.bioMother.IsNull() && ChildSpawnService::IsActorWerewolf(rec.bioMother.raw());
             const bool fatherWW = (!rec.bioFather.IsNull() && !rec.bioFather.IsUnknownFather()) &&
                                   ChildSpawnService::IsActorWerewolf(rec.bioFather.raw());
             Domain::Lineage::EvaluateChildBeastbloodInheritance(rec, motherWW, fatherWW);
+        }
+
+        if (rec.stage != Foundation::ChildStage::Unborn && !rec.bioLineageEvaluated) {
+            ChildVisualReconciler::GetSingleton().EvaluateChildBioLineageAtBirth(rec);
         }
 
         if (rec.skyrimNetUuid == 0 && hasSynthErase && synthFormID != 0 &&
@@ -822,15 +852,11 @@ namespace MARAS::App {
             return false;
         }
 
-        const bool inPlayerHousehold = preRec->guardians.HasGuardian(State::ActorId::Player());
-        if (inPlayerHousehold) {
-            OnChildRemovedFromHousehold(
-                childID,
-                outcome.removedFactionSnapshot ? &(*outcome.removedFactionSnapshot) : nullptr);
-            ClearAdoptableFactionDirect(childID);
-        } else {
-            RemoveChildSandboxAroundParentLinkedRef(childID);
-        }
+        OnChildRemovedFromHousehold(
+            childID,
+            outcome.removedFactionSnapshot ? &(*outcome.removedFactionSnapshot) : nullptr);
+        ClearAdoptableFactionDirect(childID);
+        RemoveChildSandboxAroundParentLinkedRef(childID);
 
         if (!IsSyntheticId(childID)) {
             PackageReconciler::GetSingleton().UnregisterActor(childID);
@@ -898,6 +924,9 @@ namespace MARAS::App {
                 if (auto refreshed = self.GetChildEntry(childID)) {
                     updatedRec = *refreshed;
                 }
+            }
+            if (!IsSyntheticId(childID)) {
+                FactionReconciler::GetSingleton().ReconcileActor(childID);
             }
             GetUiBridgeGateway().OnChildUpdated(updatedRec);
             GetUiBridgeGateway().SendNPCDetail(childID);
@@ -1087,21 +1116,46 @@ namespace MARAS::App {
         if (childID == 0) {
             return false;
         }
-        if (fatherID != 0) {
+        const auto preSnap = State::WorldStore::GetSingleton().Snapshot();
+        const auto* existing = (preSnap && preSnap->lineage)
+            ? preSnap->lineage->FindChild(State::ChildId{ childID })
+            : nullptr;
+        if (!existing) {
+            return false;
+        }
+        if (fatherID != 0 && fatherID != kUnknownFatherFormID) {
             RelationshipUseCases::GetSingleton().EnsureRegistered(fatherID);
         }
+
+        Domain::Lineage::SetPresumedFatherInput input{};
+        input.childId = State::ChildId{ childID };
+        input.fatherId = State::ActorId{ fatherID };
+        input.currentGameDay = GetCurrentGameDays();
+        if (!existing->bioFather.IsNull() && !existing->bioFather.IsUnknownFather()) {
+            const RE::FormID bfId = existing->bioFather.raw();
+            input.bioFatherName = ActorSvc::GetName(bfId);
+            if (auto* race = ActorSvc::GetRace(bfId)) {
+                input.bioFatherRaceId = State::FormRawId{ race->GetFormID() };
+            }
+            input.bioFatherRaceEditorId = ActorSvc::GetRaceEditorID(bfId);
+        }
+        if (fatherID != 0 && fatherID != kUnknownFatherFormID) {
+            input.presumedFatherRaceEditorId = ActorSvc::GetRaceEditorID(fatherID);
+        }
+
         std::optional<State::ChildRecord> updatedRec;
         State::WorldStore::GetSingleton().Modify([&](State::WorldState& ws) {
-            auto* rec = ws.lineage.Write().FindChildMutable(State::ChildId{ childID });
-            if (!rec) {
-                return;
+            if (Domain::Lineage::ApplySetPresumedFather(ws, input)) {
+                if (const auto* rec = ws.lineage.Read().FindChild(State::ChildId{ childID })) {
+                    updatedRec = *rec;
+                }
             }
-            rec->presumedFather = State::ActorId{ fatherID };
-            updatedRec = *rec;
         });
         if (!updatedRec.has_value()) {
             return false;
         }
+        MARAS_LOG_INFO("[Lineage] Set child {:08X} presumed father to {:08X}",
+                       childID, updatedRec->presumedFather.raw());
         GetUiBridgeGateway().OnChildUpdated(*updatedRec);
         GetUiBridgeGateway().SendNPCDetail(childID);
         return true;
@@ -1478,18 +1532,29 @@ namespace MARAS::App {
                 const RE::FormID removedOther =
                     !gDiff.PrimaryRemoved().IsNull() ? gDiff.PrimaryRemoved().raw() : formerSpouseID;
                 SendChildEvent(
-                    "custody_divorce", cID,
+                    "guardians_changed", cID,
                     postRec->guardians.slotA.raw(), postRec->guardians.slotB.raw(),
                     removedOther, "divorce");
             }
 
             if (secretBecameDiscovered) {
                 const bool wasSecretPartner = preRec.paternitySecret.isSecretForPartner;
-                const bool wasPregSecretPartner = preRec.paternitySecret.isPregnancySecretForPartner;
+                const bool wasSecretBio = preRec.paternitySecret.isSecretForBioFather;
+                const bool wasPregSecretPartner =
+                    (preRec.stage == Foundation::ChildStage::Unborn) &&
+                    wasSecretPartner &&
+                    preRec.paternitySecret.isPregnancySecretForPartner;
                 const float childIdFloat = static_cast<float>(static_cast<std::int32_t>(cID));
-                if (wasSecretPartner) {
-                    const std::string baseOutcome = "presumed_father_learnt";
-                    const std::string eventOutcome = wasPregSecretPartner
+                if (wasSecretPartner || wasSecretBio) {
+                    std::string baseOutcome;
+                    if (wasSecretPartner && wasSecretBio) {
+                        baseOutcome = "mother_confessed_both";
+                    } else if (wasSecretPartner) {
+                        baseOutcome = "presumed_father_learnt";
+                    } else {
+                        baseOutcome = "mother_confessed_bio";
+                    }
+                    const std::string eventOutcome = (wasSecretPartner && wasPregSecretPartner)
                         ? (baseOutcome + "_unannounced")
                         : baseOutcome;
                     AffectionEventCoordinator::GetSingleton().OnPaternitySecretResolved(cID, eventOutcome);
@@ -1509,11 +1574,22 @@ namespace MARAS::App {
                         GetSkyrimNetGateway().RecordPaternityReveal(cID, "divorce_revealed");
                     }
                 }
-                const std::string fallbackChild = Tr("common.child_fallback");
-                const std::string notifyMsg = TrFmt(
-                    "hud.paternity_resolved_breakup",
-                    { { "child", postRec->name.empty() ? std::string_view(fallbackChild) : std::string_view(postRec->name) } });
-                QueueHUDMessage(notifyMsg);
+
+                const RE::FormID motherID = postRec->bioMother.raw();
+                const RE::FormID bioFatherID =
+                    (!postRec->bioFather.IsNull() && !postRec->bioFather.IsUnknownFather())
+                        ? postRec->bioFather.raw()
+                        : 0;
+                if (Utils::MatchesActor(actorA, kPlayerFormID) ||
+                    Utils::MatchesActor(actorB, kPlayerFormID) ||
+                    Utils::MatchesActor(motherID, kPlayerFormID) ||
+                    Utils::MatchesActor(bioFatherID, kPlayerFormID)) {
+                    const std::string fallbackChild = Tr("common.child_fallback");
+                    const std::string notifyMsg = TrFmt(
+                        "hud.paternity_resolved_breakup",
+                        { { "child", postRec->name.empty() ? std::string_view(fallbackChild) : std::string_view(postRec->name) } });
+                    QueueHUDMessage(notifyMsg);
+                }
             }
 
             GetUiBridgeGateway().OnChildUpdated(*postRec);
@@ -1616,7 +1692,14 @@ namespace MARAS::App {
             }
 
             const bool guardiansChanged = (preRec.guardians != postRec->guardians);
+            const bool isDeceasedBioOrPresumed =
+                Utils::MatchesActor(preRec.bioMother.raw(), deceasedID) ||
+                (!preRec.bioFather.IsUnknownFather() && Utils::MatchesActor(preRec.bioFather.raw(), deceasedID)) ||
+                Utils::MatchesActor(preRec.presumedFather.raw(), deceasedID);
             if (!guardiansChanged) {
+                if (isDeceasedBioOrPresumed && postRec->stage != Foundation::ChildStage::Adult) {
+                    UpdateNonPlayerChildPackageOverride(cID);
+                }
                 continue;
             }
 
@@ -1680,10 +1763,17 @@ namespace MARAS::App {
                     deceasedID, "parent_death");
                 GetUiBridgeGateway().OnChildUpdated(*postRec);
             } else {
+                State::ChildRecord postEntry = *postRec;
+                if (postEntry.paternitySecret.HasActiveSecret()) {
+                    PaternityWorkflowCoordinator::GetSingleton().ResolvePaternitySecret(cID, false);
+                    if (auto refreshed = GetChildEntry(cID)) {
+                        postEntry = *refreshed;
+                    }
+                }
                 UpdateChildBothParentsFaction(cID);
                 SyncChildHouseholdState(cID, 0, 0);
                 SendChildEvent("inherited", cID, 0, 0, deceasedID, "parent_death");
-                GetUiBridgeGateway().OnChildUpdated(*postRec);
+                GetUiBridgeGateway().OnChildUpdated(postEntry);
             }
         }
 
@@ -1909,11 +1999,15 @@ namespace MARAS::App {
         }
         const auto snap = State::WorldStore::GetSingleton().Snapshot();
         for (const auto& [k, rec] : snap->lineage->AllChildren()) {
+            const bool isPresumedFather =
+                rec.paternitySecret.isSecretForPartner &&
+                ((!rec.presumedFather.IsNull() && Utils::MatchesActor(rec.presumedFather.raw(), parentID)) ||
+                 Utils::MatchesActor(GetMotherPartner(k.raw()), parentID));
             if (Utils::MatchesActor(rec.guardians.slotA.raw(), parentID) ||
                 Utils::MatchesActor(rec.guardians.slotB.raw(), parentID) ||
                 Utils::MatchesActor(rec.bioMother.raw(), parentID) ||
-                Utils::MatchesActor(rec.bioFather.raw(), parentID) ||
-                Utils::MatchesActor(rec.presumedFather.raw(), parentID)) {
+                (!rec.bioFather.IsUnknownFather() && Utils::MatchesActor(rec.bioFather.raw(), parentID)) ||
+                isPresumedFather) {
                 out.push_back(k.raw());
             }
         }
@@ -1960,37 +2054,63 @@ namespace MARAS::App {
     }
 
     RE::FormID LineageUseCases::GetBioFather(RE::FormID childID) const {
+        if (childID == 0) {
+            return 0;
+        }
         const auto snap = State::WorldStore::GetSingleton().Snapshot();
         const auto* rec = snap->lineage->FindChild(State::ChildId{ childID });
-        return rec ? rec->bioFather.raw() : 0;
+        if (!rec || rec->bioFather.IsUnknownFather()) {
+            return 0;
+        }
+        return rec->bioFather.raw();
     }
 
     RE::FormID LineageUseCases::GetPresumedFather(RE::FormID childID) const {
-        const auto snap = State::WorldStore::GetSingleton().Snapshot();
-        const auto* rec = snap->lineage->FindChild(State::ChildId{ childID });
-        return rec ? rec->presumedFather.raw() : 0;
-    }
-
-    RE::FormID LineageUseCases::GetMotherPartner(RE::FormID childID) const {
+        if (childID == 0) {
+            return 0;
+        }
         const auto snap = State::WorldStore::GetSingleton().Snapshot();
         const auto* rec = snap->lineage->FindChild(State::ChildId{ childID });
         if (!rec) {
             return 0;
         }
-        if (!rec->presumedFather.IsNull()) {
-            return rec->presumedFather.raw();
+        if (!rec->paternitySecret.isSecret && !rec->paternitySecret.discovered) {
+            return 0;
+        }
+        const RE::FormID presID = rec->presumedFather.raw();
+        if (presID == 0 ||
+            Utils::MatchesActor(presID, rec->bioMother.raw()) ||
+            (!rec->bioFather.IsNull() && !rec->bioFather.IsUnknownFather() &&
+             Utils::MatchesActor(presID, rec->bioFather.raw()))) {
+            return 0;
+        }
+        return presID;
+    }
+
+    RE::FormID LineageUseCases::GetMotherPartner(RE::FormID childID) const {
+        if (childID == 0) {
+            return 0;
+        }
+        const auto snap = State::WorldStore::GetSingleton().Snapshot();
+        const auto* rec = snap->lineage->FindChild(State::ChildId{ childID });
+        if (!rec) {
+            return 0;
+        }
+        const RE::FormID presID = GetPresumedFather(childID);
+        if (presID != 0) {
+            return presID;
         }
         const RE::FormID mID = rec->bioMother.raw();
         if (mID == 0) {
             return 0;
         }
-        const RE::FormID partner = GetPrimaryPartnerInSnap(*snap, mID);
-        if (partner != 0 && !Utils::MatchesActor(partner, mID)) {
-            return partner;
-        }
         const RE::FormID coGuardian = rec->guardians.OtherGuardian(State::ActorId{ mID }).raw();
         if (coGuardian != 0 && !Utils::MatchesActor(coGuardian, mID)) {
             return coGuardian;
+        }
+        const RE::FormID partner = GetPrimaryPartnerInSnap(*snap, mID);
+        if (partner != 0 && !Utils::MatchesActor(partner, mID)) {
+            return partner;
         }
         return 0;
     }
@@ -2051,9 +2171,10 @@ namespace MARAS::App {
     // =========================================================================
 
     bool LineageUseCases::OnChildAddedToHousehold(RE::FormID childID, RE::FormID houseID) {
-        if (childID == 0 || IsSyntheticId(childID)) {
+        if (childID == 0) {
             return false;
         }
+        const bool isSynthetic = IsSyntheticId(childID);
         const auto preSnap = State::WorldStore::GetSingleton().Snapshot();
         const auto* childRec = preSnap->lineage->FindChild(State::ChildId{ childID });
         if (childRec && childRec->stage == Foundation::ChildStage::Adult) {
@@ -2092,20 +2213,27 @@ namespace MARAS::App {
         });
 
         auto& ops = PlayerChildrenEngineOps::GetSingleton();
-        ops.SnapshotChildFactions(childID);
-        if (isNewToHousehold) {
-            ops.ClearChildExternalFactions(childID);
+        if (!isSynthetic) {
+            ops.SnapshotChildFactions(childID);
+            if (isNewToHousehold) {
+                ops.ClearChildExternalFactions(childID);
+            }
         }
         if (resolvedHouseID != 0) {
             const auto relocated = HouseholdUseCases::GetSingleton().RelocateFamilyUnit(
                 childID, resolvedHouseID, /*moveParents=*/true);
             if (relocated.empty()) {
                 State::WorldStore::GetSingleton().Modify([&](State::WorldState& ws) {
-                    ws.household.Write().AssignTenant(
+                    auto& hh = ws.household.Write();
+                    hh.AssignTenant(
                         childID, State::HouseId{ resolvedHouseID }, /*stayAtHome=*/true, /*isChildTenant=*/true);
+                    if (auto* st = hh.FindChildStateMutable(State::ChildId{ childID })) {
+                        st->currentHouseId = State::HouseId{ resolvedHouseID };
+                    }
                 });
-                ops.MoveChildAndMarkerToHouse(childID, resolvedHouseID, isNewToHousehold);
-                PackageReconciler::GetSingleton().ReconcileActor(childID);
+                if (!isSynthetic) {
+                    ops.MoveChildAndMarkerToHouse(childID, resolvedHouseID, isNewToHousehold);
+                }
                 GlobalVarReconciler::GetSingleton().ReconcileGlobals();
             } else {
                 for (const RE::FormID fid : relocated) {
@@ -2114,19 +2242,24 @@ namespace MARAS::App {
                     }
                 }
             }
-        } else if (auto* childActor = RE::TESForm::LookupByID<RE::Actor>(childID)) {
-            if (auto* marker = ops.GetOrCreateChildHomeMarker(childActor)) {
-                State::WorldStore::GetSingleton().Modify([&](State::WorldState& ws) {
-                    if (auto* st = ws.household.Write().FindChildStateMutable(State::ChildId{ childID })) {
-                        st->homeMarkerId = State::RefId{ marker->GetFormID() };
-                    }
-                });
-                ops.SetChildHomeMarkerLinkedRef(childID, marker->GetFormID());
+        } else if (!isSynthetic) {
+            if (auto* childActor = RE::TESForm::LookupByID<RE::Actor>(childID)) {
+                if (auto* marker = ops.GetOrCreateChildHomeMarker(childActor)) {
+                    State::WorldStore::GetSingleton().Modify([&](State::WorldState& ws) {
+                        if (auto* st = ws.household.Write().FindChildStateMutable(State::ChildId{ childID })) {
+                            st->homeMarkerId = State::RefId{ marker->GetFormID() };
+                        }
+                    });
+                    ops.SetChildHomeMarkerLinkedRef(childID, marker->GetFormID());
+                }
             }
         }
 
-        ops.ApplyOrderOnActorFromWorld(childID);
-        FactionReconciler::GetSingleton().ReconcileActor(childID);
+        if (!isSynthetic) {
+            ops.ApplyOrderOnActorFromWorld(childID);
+            FactionReconciler::GetSingleton().ReconcileActor(childID);
+            PackageReconciler::GetSingleton().ReconcileActor(childID);
+        }
         return true;
     }
 
@@ -2136,6 +2269,9 @@ namespace MARAS::App {
         if (childID == 0) {
             return false;
         }
+        (void)RemovePet(childID);
+        (void)RemoveCritter(childID);
+
         bool hadState = false;
         Foundation::RefId transientCritterId{};
         State::WorldStore::GetSingleton().Modify([&](State::WorldState& ws) {
@@ -2169,7 +2305,7 @@ namespace MARAS::App {
     }
 
     bool LineageUseCases::MoveChildToHouse(RE::FormID childID, RE::FormID houseID, bool moveActor) {
-        if (childID == 0 || houseID == 0 || IsSyntheticId(childID)) {
+        if (childID == 0 || houseID == 0) {
             return false;
         }
         const auto snap = State::WorldStore::GetSingleton().Snapshot();
@@ -2179,11 +2315,22 @@ namespace MARAS::App {
         State::WorldStore::GetSingleton().Modify([&](State::WorldState& ws) {
             auto& hh = ws.household.Write();
             hh.AssignTenant(childID, State::HouseId{ houseID }, /*stayAtHome=*/true, /*isChildTenant=*/true);
-            if (auto* st = hh.FindChildStateMutable(State::ChildId{ childID })) {
-                st->currentHouseId = State::HouseId{ houseID };
-            }
+            const State::ChildId cid{ childID };
+            State::ChildHouseholdRecord rec =
+                hh.FindChildState(cid) ? *hh.FindChildState(cid) : State::ChildHouseholdRecord{};
+            rec.childId = cid;
+            rec.currentHouseId = State::HouseId{ houseID };
+            hh.UpsertChildState(std::move(rec));
         });
-        return PlayerChildrenEngineOps::GetSingleton().MoveChildAndMarkerToHouse(childID, houseID, moveActor);
+        if (!IsSyntheticId(childID)) {
+            (void)PlayerChildrenEngineOps::GetSingleton().MoveChildAndMarkerToHouse(childID, houseID, moveActor);
+            FactionReconciler::GetSingleton().ReconcileActor(childID);
+            PackageReconciler::GetSingleton().ReconcileActor(childID);
+            ApplyPackageForCurrentState(childID);
+        }
+        MARAS_LOG_INFO("MoveChildToHouse: Child {:08X} assigned to house {:08X} (moveActor: {})",
+                       childID, houseID, moveActor);
+        return true;
     }
 
     void LineageUseCases::ReconcileChildHouseholdOnLoad() {
@@ -2204,7 +2351,13 @@ namespace MARAS::App {
         if (!outcome.applied) {
             return false;
         }
-        ApplyPackageForCurrentState(childID);
+        if (outcome.updatedChildren.empty()) {
+            ApplyPackageForCurrentState(childID);
+        } else {
+            for (const State::ChildId updatedId : outcome.updatedChildren) {
+                ApplyPackageForCurrentState(updatedId.raw());
+            }
+        }
         MARAS_LOG_INFO("IssueOrder: Issued order {} to child {:08X} for {:.1f}h",
                        orderValue, childID, durationGameHours);
         return true;
@@ -2258,16 +2411,71 @@ namespace MARAS::App {
     }
 
     void LineageUseCases::RollForcegreetForHousehold() {
-        const RE::FormID chosenID = PickForcegreetChild(0);
-        if (chosenID == 0) {
+        const auto snap = State::WorldStore::GetSingleton().Snapshot();
+        if (!snap || !snap->household || snap->household->AllChildStates().empty()) {
             return;
         }
+
+        // Track houses that already have an active forcegreet slot (ONE shared per-household slot)
+        std::unordered_set<RE::FormID> housesWithActiveForcegreet;
+        for (const auto& [cid, st] : snap->household->AllChildStates()) {
+            if (IsSyntheticId(cid.raw()) || !st.forcegreetPending) {
+                continue;
+            }
+            if (snap->lineage) {
+                if (const auto* rec = snap->lineage->FindChild(cid);
+                    rec != nullptr && rec->stage != Foundation::ChildStage::Child) {
+                    continue;
+                }
+            }
+            const State::HouseId resolvedHouse = !st.currentHouseId.IsNull()
+                                                     ? st.currentHouseId
+                                                     : snap->household->GetTenantHouse(cid.raw());
+            if (!resolvedHouse.IsNull()) {
+                housesWithActiveForcegreet.insert(resolvedHouse.raw());
+            }
+        }
+
+        const float nowDay = GetCurrentGameDays();
+        auto rng = MakeEngineRng();
+        std::vector<std::pair<RE::FormID, RE::FormID>> chosenByHouse;
+
+        for (const auto& house : snap->household->AllHouses()) {
+            if (house.houseId.IsNull() || housesWithActiveForcegreet.contains(house.houseId.raw())) {
+                continue;
+            }
+            const auto candidates = Domain::Lineage::SelectForcegreetChildrenByHouse(
+                *snap, house.houseId, /*onlyPhysicalActors=*/true);
+            if (candidates.empty()) {
+                continue;
+            }
+            const RE::FormID chosenID =
+                Domain::Lineage::PickWeightedChild(*snap, candidates, nowDay, rng).raw();
+            if (chosenID != 0) {
+                chosenByHouse.emplace_back(house.houseId.raw(), chosenID);
+            }
+        }
+
+        if (chosenByHouse.empty()) {
+            return;
+        }
+
         State::WorldStore::GetSingleton().Modify([&](State::WorldState& ws) {
-            if (auto* st = ws.household.Write().FindChildStateMutable(State::ChildId{ chosenID })) {
-                st->forcegreetPending = true;
+            auto& hh = ws.household.Write();
+            for (const auto& [houseID, chosenID] : chosenByHouse) {
+                (void)houseID;
+                if (auto* st = hh.FindChildStateMutable(State::ChildId{ chosenID })) {
+                    st->forcegreetPending = true;
+                }
             }
         });
-        ApplyPackageForCurrentState(chosenID);
+
+        for (const auto& [houseID, chosenID] : chosenByHouse) {
+            ApplyPackageForCurrentState(chosenID);
+            PackageReconciler::GetSingleton().ReconcileActor(chosenID);
+            MARAS_LOG_INFO("RollForcegreetForHousehold: Picked child {:08X} for forcegreet in house {:08X}",
+                           chosenID, houseID);
+        }
     }
 
     bool LineageUseCases::AssignPet(RE::FormID childID, RE::FormID petActorOrBaseID) {
@@ -2275,15 +2483,23 @@ namespace MARAS::App {
             return false;
         }
         bool ok = false;
+        RE::FormID oldPetId = 0;
         State::WorldStore::GetSingleton().Modify([&](State::WorldState& ws) {
             if (auto* st = ws.household.Write().FindChildStateMutable(State::ChildId{ childID })) {
+                oldPetId = st->petId.raw();
                 st->petId = State::RefId{ petActorOrBaseID };
                 ok = true;
             }
         });
-        if (ok && petActorOrBaseID != 0 && !IsSyntheticId(petActorOrBaseID)) {
-            PackageReconciler::GetSingleton().RegisterPetCritter(petActorOrBaseID);
-            FactionReconciler::GetSingleton().ReconcileActor(petActorOrBaseID);
+        if (ok) {
+            if (oldPetId != 0 && oldPetId != petActorOrBaseID && !IsSyntheticId(oldPetId)) {
+                PackageReconciler::GetSingleton().UnregisterActor(oldPetId);
+                FactionReconciler::GetSingleton().ReconcileActor(oldPetId);
+            }
+            if (petActorOrBaseID != 0 && !IsSyntheticId(petActorOrBaseID)) {
+                PackageReconciler::GetSingleton().RegisterPetCritter(petActorOrBaseID);
+                FactionReconciler::GetSingleton().ReconcileActor(petActorOrBaseID);
+            }
         }
         return ok;
     }
@@ -2348,14 +2564,23 @@ namespace MARAS::App {
             return false;
         }
         bool ok = false;
+        RE::FormID oldCritterId = 0;
         State::WorldStore::GetSingleton().Modify([&](State::WorldState& ws) {
             if (auto* st = ws.household.Write().FindChildStateMutable(State::ChildId{ childID })) {
+                oldCritterId = st->critterId.raw();
                 st->critterId = State::RefId{ critterFormID };
                 ok = true;
             }
         });
-        if (ok && critterFormID != 0 && !IsSyntheticId(critterFormID)) {
-            PackageReconciler::GetSingleton().RegisterPetCritter(critterFormID);
+        if (ok) {
+            if (oldCritterId != 0 && oldCritterId != critterFormID && !IsSyntheticId(oldCritterId)) {
+                PackageReconciler::GetSingleton().UnregisterActor(oldCritterId);
+                FactionReconciler::GetSingleton().ReconcileActor(oldCritterId);
+            }
+            if (critterFormID != 0 && !IsSyntheticId(critterFormID)) {
+                PackageReconciler::GetSingleton().RegisterPetCritter(critterFormID);
+                FactionReconciler::GetSingleton().ReconcileActor(critterFormID);
+            }
         }
         return ok;
     }
@@ -2370,6 +2595,7 @@ namespace MARAS::App {
         });
         if (removedCritter != 0) {
             PackageReconciler::GetSingleton().UnregisterActor(removedCritter);
+            FactionReconciler::GetSingleton().ReconcileActor(removedCritter);
             return true;
         }
         return false;
@@ -2563,31 +2789,12 @@ namespace MARAS::App {
             return;
         }
 
-        State::WorldStore::GetSingleton().Modify([&](State::WorldState& ws) {
-            auto& aff = ws.affection.Write();
-            const auto bounds = aff.GetMinMaxForType("family").value_or(std::pair<int, int>{ 0, 6 });
-            for (const RE::FormID partnerID : partnersToUpdate) {
-                const State::ActorId pId{ partnerID };
-                const auto* prof = ws.actors.Read().Find(pId.AsRefId());
-                const auto temp = prof ? prof->temperament : Foundation::Temperament::Proud;
-                const float rawBonus = Domain::Lineage::CalculateChildInteractionFamilyAffection(temp);
-
-                const float prevDaily = aff.GetDailyAccumulation(pId, "family");
-                const float clampedDaily = std::clamp(
-                    prevDaily + rawBonus, static_cast<float>(bounds.first), static_cast<float>(bounds.second));
-                const float appliedDelta = clampedDaily - prevDaily;
-                if (appliedDelta != 0.0f) {
-                    const int prevPerm = aff.GetPermanent(pId, 50);
-                    aff.SetPermanent(pId, prevPerm + static_cast<int>(std::lround(appliedDelta)));
-                    aff.SetDailyAccumulation(pId, "family", clampedDaily);
-                }
-                aff.SetLastInteractionDay(pId, currentDays);
-            }
-        });
-
+        auto& rel = RelationshipUseCases::GetSingleton();
         for (const RE::FormID partnerID : partnersToUpdate) {
-            FactionReconciler::GetSingleton().ReconcileActor(partnerID);
-            GetUiBridgeGateway().SendNPCDetail(partnerID);
+            const auto* prof = snap->actors->Find(State::RefId{ partnerID });
+            const auto temp = prof ? prof->temperament : Foundation::Temperament::Proud;
+            const float affection = Domain::Lineage::CalculateChildInteractionFamilyAffection(temp);
+            rel.AddAffection(partnerID, affection, "family");
         }
     }
 
@@ -2629,15 +2836,25 @@ namespace MARAS::App {
 
     RE::FormID LineageUseCases::GetNewlyAdoptedChild(RE::FormID playerHouseFormID) const {
         const auto snap = State::WorldStore::GetSingleton().Snapshot();
+        std::vector<RE::FormID> candidates;
         for (const auto& [cid, st] : snap->household->AllChildStates()) {
             if (IsSyntheticId(cid.raw())) {
                 continue;
             }
-            if ((playerHouseFormID == 0 || st.currentHouseId.raw() == playerHouseFormID) && st.isNewlyAdopted) {
-                return cid.raw();
+            if (snap->lineage) {
+                if (const auto* rec = snap->lineage->FindChild(cid);
+                    rec != nullptr && rec->stage != Foundation::ChildStage::Child) {
+                    continue;
+                }
+            }
+            const RE::FormID effectiveHouse = !st.currentHouseId.IsNull()
+                                                  ? st.currentHouseId.raw()
+                                                  : snap->household->GetTenantHouse(cid.raw()).raw();
+            if ((playerHouseFormID == 0 || effectiveHouse == playerHouseFormID) && st.isNewlyAdopted) {
+                candidates.push_back(cid.raw());
             }
         }
-        return 0;
+        return PickWeightedChild(candidates);
     }
 
     RE::FormID LineageUseCases::GetChildWithoutPet(RE::FormID playerHouseFormID) const {
@@ -2646,18 +2863,28 @@ namespace MARAS::App {
         }
         const auto snap = State::WorldStore::GetSingleton().Snapshot();
         const float now = GetCurrentGameDays();
+        std::vector<RE::FormID> candidates;
         for (const auto& [cid, st] : snap->household->AllChildStates()) {
             if (IsSyntheticId(cid.raw())) {
                 continue;
             }
-            if (playerHouseFormID != 0 && st.currentHouseId.raw() != playerHouseFormID) {
+            if (snap->lineage) {
+                if (const auto* rec = snap->lineage->FindChild(cid);
+                    rec != nullptr && rec->stage != Foundation::ChildStage::Child) {
+                    continue;
+                }
+            }
+            const RE::FormID effectiveHouse = !st.currentHouseId.IsNull()
+                                                  ? st.currentHouseId.raw()
+                                                  : snap->household->GetTenantHouse(cid.raw()).raw();
+            if (playerHouseFormID != 0 && effectiveHouse != playerHouseFormID) {
                 continue;
             }
             if (st.petId.IsNull() && !Domain::Lineage::IsPetBannedForChild(*snap, cid, now)) {
-                return cid.raw();
+                candidates.push_back(cid.raw());
             }
         }
-        return 0;
+        return PickWeightedChild(candidates);
     }
 
     RE::FormID LineageUseCases::GetChildWithoutCritter(RE::FormID playerHouseFormID) const {
@@ -2666,38 +2893,66 @@ namespace MARAS::App {
         }
         const auto snap = State::WorldStore::GetSingleton().Snapshot();
         const float now = GetCurrentGameDays();
+        std::vector<RE::FormID> candidates;
         for (const auto& [cid, st] : snap->household->AllChildStates()) {
             if (IsSyntheticId(cid.raw())) {
                 continue;
             }
-            if (playerHouseFormID != 0 && st.currentHouseId.raw() != playerHouseFormID) {
+            if (snap->lineage) {
+                if (const auto* rec = snap->lineage->FindChild(cid);
+                    rec != nullptr && rec->stage != Foundation::ChildStage::Child) {
+                    continue;
+                }
+            }
+            const RE::FormID effectiveHouse = !st.currentHouseId.IsNull()
+                                                  ? st.currentHouseId.raw()
+                                                  : snap->household->GetTenantHouse(cid.raw()).raw();
+            if (playerHouseFormID != 0 && effectiveHouse != playerHouseFormID) {
                 continue;
             }
             if (st.critterId.IsNull() && !Domain::Lineage::IsCritterBannedForChild(*snap, cid, now)) {
-                return cid.raw();
+                candidates.push_back(cid.raw());
             }
         }
-        return 0;
+        return PickWeightedChild(candidates);
     }
 
     std::vector<RE::FormID> LineageUseCases::GetChildrenWithoutScene(
         RE::FormID playerHouseFormID,
         std::int32_t sceneID) const {
         const auto snap = State::WorldStore::GetSingleton().Snapshot();
-        std::vector<RE::FormID> out;
+        std::vector<RE::FormID> candidates;
         for (const auto& [cid, st] : snap->household->AllChildStates()) {
             if (IsSyntheticId(cid.raw())) {
                 continue;
             }
-            if (playerHouseFormID != 0 && st.currentHouseId.raw() != playerHouseFormID) {
+            if (snap->lineage) {
+                if (const auto* rec = snap->lineage->FindChild(cid);
+                    rec != nullptr && rec->stage != Foundation::ChildStage::Child) {
+                    continue;
+                }
+            }
+            const RE::FormID effectiveHouse = !st.currentHouseId.IsNull()
+                                                  ? st.currentHouseId.raw()
+                                                  : snap->household->GetTenantHouse(cid.raw()).raw();
+            if (playerHouseFormID != 0 && effectiveHouse != playerHouseFormID) {
                 continue;
             }
             const bool played = (sceneID == 1) ? st.playedScene1 : ((sceneID == 2) ? st.playedScene2 : false);
             if (!played) {
-                out.push_back(cid.raw());
+                candidates.push_back(cid.raw());
             }
         }
-        return out;
+        if (candidates.size() < 2) {
+            return {};
+        }
+        if (candidates.size() == 2) {
+            return candidates;
+        }
+        thread_local std::mt19937 gen(std::random_device{}());
+        std::shuffle(candidates.begin(), candidates.end(), gen);
+        candidates.resize(2);
+        return candidates;
     }
 
     RE::FormID LineageUseCases::GetWeightedRandomChild(RE::FormID playerHouseFormID) const {
@@ -2785,6 +3040,12 @@ namespace MARAS::App {
         if (!updatedRec.has_value()) {
             return false;
         }
+        MARAS_LOG_INFO("[Fertility] Set child {:08X} stage to {}", childID, static_cast<int>(stage));
+        UpdateNonPlayerChildPackageOverride(childID);
+        if (!IsSyntheticId(childID)) {
+            FactionReconciler::GetSingleton().ReconcileActor(childID);
+            PackageReconciler::GetSingleton().ReconcileActor(childID);
+        }
         GetUiBridgeGateway().OnChildUpdated(*updatedRec);
         GetUiBridgeGateway().SendOverviewData();
         GetUiBridgeGateway().SendNPCDetail(childID);
@@ -2811,11 +3072,21 @@ namespace MARAS::App {
     }
 
     std::uint8_t LineageUseCases::GetChildGender(RE::FormID childID) const {
+        if (childID == 0) {
+            return 2;
+        }
         const auto snap = State::WorldStore::GetSingleton().Snapshot();
         if (const auto* rec = snap->lineage->FindChild(State::ChildId{ childID })) {
-            if (rec->gender <= 1) {
-                return rec->gender;
+            if (rec->stage == Foundation::ChildStage::Unborn) {
+                return 2;
             }
+            if (!IsSyntheticId(childID)) {
+                const std::uint8_t liveSex = ActorSvc::GetSex(childID);
+                if (liveSex <= 1) {
+                    return liveSex;
+                }
+            }
+            return rec->gender;
         }
         if (!IsSyntheticId(childID)) {
             return ActorSvc::GetSex(childID);
@@ -2827,17 +3098,37 @@ namespace MARAS::App {
         if (childID == 0) {
             return false;
         }
+        const float currentDay = GetCurrentGameDays();
+        const std::int32_t inferredClass =
+            Engine::TrainingCatalogLoader::GetSingleton().GetCatalog().FindClassByLocation(location);
+
         std::optional<State::ChildRecord> updatedRec;
         State::WorldStore::GetSingleton().Modify([&](State::WorldState& ws) {
             if (auto* rec = ws.lineage.Write().FindChildMutable(State::ChildId{ childID })) {
                 rec->trainingLocation = location;
+                rec->stage = Foundation::ChildStage::Training;
+                if (rec->trainingStartGameDay <= 0.0f) {
+                    rec->trainingStartGameDay = currentDay;
+                }
+                if (rec->trainingClassIndex < 0) {
+                    rec->trainingClassIndex = inferredClass;
+                }
                 updatedRec = *rec;
             }
         });
         if (!updatedRec.has_value()) {
             return false;
         }
+        MARAS_LOG_INFO(
+            "[Fertility] Set child {:08X} training location to '{}' (classIdx={}, startDay={:.2f})",
+            childID, location, updatedRec->trainingClassIndex, updatedRec->trainingStartGameDay);
+        UpdateNonPlayerChildPackageOverride(childID);
+        if (!IsSyntheticId(childID)) {
+            FactionReconciler::GetSingleton().ReconcileActor(childID);
+            PackageReconciler::GetSingleton().ReconcileActor(childID);
+        }
         GetUiBridgeGateway().OnChildUpdated(*updatedRec);
+        GetUiBridgeGateway().SendOverviewData();
         GetUiBridgeGateway().SendNPCDetail(childID);
         return true;
     }
@@ -2869,15 +3160,23 @@ namespace MARAS::App {
             }
             return false;
         }
-        if (existing->stage == Foundation::ChildStage::Unborn ||
-            existing->stage == Foundation::ChildStage::Adult) {
+        if (existing->stage != Foundation::ChildStage::Child) {
             if (outReason) {
-                *outReason = "Child stage is not eligible for training";
+                *outReason = "Only Stage 2 (Young Child) children can be sent to training";
             }
+            MARAS_LOG_WARN(
+                "[Training] SendChildToTraining failed for child {:08X} ('{}'): invalid stage={} (expected Stage 2 Child)",
+                childID, existing->name, static_cast<int>(existing->stage));
             return false;
         }
 
         State::ChildRecord rec = *existing;
+        if (!rec.beastbloodEvaluated) {
+            const bool motherWW = !rec.bioMother.IsNull() && ChildSpawnService::IsActorWerewolf(rec.bioMother.raw());
+            const bool fatherWW = (!rec.bioFather.IsNull() && !rec.bioFather.IsUnknownFather()) &&
+                                  ChildSpawnService::IsActorWerewolf(rec.bioFather.raw());
+            Domain::Lineage::EvaluateChildBeastbloodInheritance(rec, motherWW, fatherWW);
+        }
         const bool isPlayerChild = rec.guardians.HasGuardian(State::ActorId::Player());
         const auto dashboardView = Projection::PerspectiveView::ForDashboard(
             snap,
@@ -3131,6 +3430,9 @@ namespace MARAS::App {
         if (!updatedRec.has_value()) {
             return false;
         }
+        if (!IsSyntheticId(childID)) {
+            FactionReconciler::GetSingleton().ReconcileActor(childID);
+        }
         GetUiBridgeGateway().OnChildUpdated(*updatedRec);
         GetUiBridgeGateway().SendNPCDetail(childID);
         return true;
@@ -3288,12 +3590,21 @@ namespace MARAS::App {
         });
 
         // If untracked by RefID yet known by BaseID on children, evaluate base custody cleanly
+        const auto postCanonicalSnap = State::WorldStore::GetSingleton().Snapshot();
+        std::unordered_map<RE::FormID, State::ChildRecord> postCanonicalChildren;
+        bool evaluatedBaseCustody = false;
         if (!wasYoungChild && !wasTrackedAdult && !isDynamicVictim &&
             victimBaseID != 0 && victimBaseID != canonicalVictimId) {
-            auto metaBase = CaptureWorldActorMetadata(State::WorldStore::GetSingleton().Snapshot(), { victimBaseID });
+            for (const auto& [k, v] : postCanonicalSnap->lineage->AllChildren()) {
+                postCanonicalChildren.emplace(k.raw(), v);
+            }
+            auto metaBase = CaptureWorldActorMetadata(postCanonicalSnap, { victimBaseID });
+            State::WorldMutationResult baseMut{};
             State::WorldStore::GetSingleton().Modify([&](State::WorldState& ws) {
-                mut.Merge(ws.EvaluateCustodyOnDeath(State::ActorId{ victimBaseID }, *metaBase));
+                baseMut = ws.EvaluateCustodyOnDeath(State::ActorId{ victimBaseID }, *metaBase);
+                mut.Merge(baseMut);
             });
+            evaluatedBaseCustody = baseMut.changed;
         }
 
         const auto postSnap = State::WorldStore::GetSingleton().Snapshot();
@@ -3346,9 +3657,12 @@ namespace MARAS::App {
             EmitModCallbackEvent("maras_actor_died", "", isPlayerKiller ? 1.0f : 0.0f, victimId);
         }
 
-        HandleDeathCustodySideEffects(preChildren, *postSnap, canonicalVictimId);
-        if (!isDynamicVictim && victimBaseID != 0 && victimBaseID != canonicalVictimId) {
-            HandleDeathCustodySideEffects(preChildren, *postSnap, victimBaseID);
+        HandleDeathCustodySideEffects(
+            preChildren,
+            evaluatedBaseCustody ? *postCanonicalSnap : *postSnap,
+            canonicalVictimId);
+        if (evaluatedBaseCustody) {
+            HandleDeathCustodySideEffects(postCanonicalChildren, *postSnap, victimBaseID);
         }
 
         if (wasTrackedAdult || wasAdultChild) {
@@ -3369,6 +3683,22 @@ namespace MARAS::App {
                     FactionReconciler::GetSingleton().ReconcileActor(partnerID);
                     PackageReconciler::GetSingleton().ReconcileActor(partnerID);
                 }
+            }
+            for (const auto dirtyId : mut.dirtyActors) {
+                if (dirtyId.IsNull() || dirtyId.raw() == canonicalVictimId || dirtyId.raw() == victimId) {
+                    continue;
+                }
+                if (dirtyId.IsPlayer()) {
+                    FactionReconciler::GetSingleton().ReconcilePlayer();
+                } else {
+                    FactionReconciler::GetSingleton().ReconcileActor(dirtyId.raw());
+                }
+            }
+            if (mut.hierarchyChanged || !mut.hierarchyShifts.empty()) {
+                RelationshipUseCases::GetSingleton().DispatchHierarchyShifts(mut);
+            }
+            if (wasMarriedToPlayer) {
+                FactionReconciler::GetSingleton().ReconcilePlayer();
             }
             GlobalVarReconciler::GetSingleton().ReconcileGlobals();
             if (wasMarriedToPlayer) {

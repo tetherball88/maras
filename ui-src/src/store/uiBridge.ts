@@ -1,4 +1,8 @@
-import { useMarasStore, flushAllPendingDebouncedActions } from './useMarasStore'
+import {
+  useMarasStore,
+  flushAllPendingDebouncedActions,
+  discardPendingDebouncedActions,
+} from './useMarasStore'
 import { useModalStore } from './useModalStore'
 import { useLocaleStore } from './useLocaleStore'
 import { t } from '../i18n'
@@ -42,7 +46,7 @@ declare global {
     onChildPromoted?: (oldIdOrData: { oldId: string; newId: string } | string, newId?: string) => void
     openMARAS?: () => void
     showMARAS?: () => void
-    closeMARASView?: () => void
+    closeMARASView?: (discardPending?: boolean | string) => void
     onGamePausedChanged?: (data: { paused: boolean } | string) => void
     showMARASModal?: (modalData: ModalPayload | string) => void
     clearMARASModal?: () => void
@@ -218,10 +222,16 @@ export function initializeUIBridge() {
     useMarasStore.getState().setIsOpen(true)
     refreshActiveDetailViewsOnOpen()
   }
-  window.closeMARASView = () => {
-    console.log('[UIBridge] closeMARASView called')
-    flushAllPendingDebouncedActions()
-    useMarasStore.getState().setIsOpen(false)
+  window.closeMARASView = (discardPending?: boolean | string) => {
+    const shouldDiscard = discardPending === true || discardPending === 'true'
+    console.log('[UIBridge] closeMARASView called', { discardPending: shouldDiscard })
+    if (shouldDiscard) {
+      discardPendingDebouncedActions()
+      useMarasStore.getState().resetSessionState()
+    } else {
+      flushAllPendingDebouncedActions()
+      useMarasStore.getState().setIsOpen(false)
+    }
   }
   window.onGamePausedChanged = (raw: { paused: boolean } | string) => {
     const data = parsePayload<{ paused: boolean }>(raw)
@@ -266,35 +276,36 @@ export function initializeUIBridge() {
     console.log('[UIBridge] receiveNPCList:', list)
     const store = useMarasStore.getState()
 
-    const profiles: NPCProfile[] = list.map((item) => {
-      const existing = store.npcProfiles.get(item.formId)
-      return {
-        formId: item.formId,
-        name: item.name,
-        race: item.race || 'Nord',
-        socialClass: existing?.socialClass ?? item.socialClass ?? SocialClass.Middle,
-        skillType: existing?.skillType ?? item.skillType ?? SkillType.Warrior,
-        temperament: existing?.temperament ?? item.temperament ?? Temperament.Proud,
-        currentHome: item.currentHome ?? existing?.currentHome,
-        originalHome: item.originalHome ?? existing?.originalHome,
-        isChild: item.isChild ?? existing?.isChild,
-        stage: item.stage ?? existing?.stage,
-        isEphemeral: item.isEphemeral ?? existing?.isEphemeral,
-        hasRefID: item.hasRefID ?? existing?.hasRefID,
-        canGrowInfant: item.canGrowInfant ?? existing?.canGrowInfant,
-        trainingLocation: item.trainingLocation ?? existing?.trainingLocation,
-        trainingClassIndex: item.trainingClassIndex ?? existing?.trainingClassIndex,
-        trainingClassName: item.trainingClassName ?? existing?.trainingClassName,
-        trainingStartGameDay: item.trainingStartGameDay ?? existing?.trainingStartGameDay,
-        critterBanned: existing?.critterBanned ?? item.critterBanned,
-        petBanned: existing?.petBanned ?? item.petBanned,
-        currentCritter: item.currentCritter !== undefined ? item.currentCritter : existing?.currentCritter,
-        currentPet: item.currentPet !== undefined ? item.currentPet : existing?.currentPet,
-        pluginName: item.pluginName || existing?.pluginName,
-        gender: item.gender ?? existing?.gender ?? 'male',
-        pendingIntent: item.pendingIntent ?? existing?.pendingIntent,
-      }
-    })
+    const profiles: NPCProfile[] = list.map((item) => ({
+      formId: item.formId,
+      name: item.name,
+      race: item.race || 'Nord',
+      socialClass: item.socialClass ?? SocialClass.Middle,
+      skillType: item.skillType ?? SkillType.Warrior,
+      temperament: item.temperament ?? Temperament.Proud,
+      currentHome: item.currentHome,
+      originalHome: item.originalHome,
+      stayAtHome: item.stayAtHome,
+      currentPackage: item.currentPackage,
+      isChild: item.isChild,
+      stage: item.stage,
+      isEphemeral: item.isEphemeral,
+      hasRefID: item.hasRefID,
+      canGrowInfant: item.canGrowInfant,
+      trainingLocation: item.trainingLocation,
+      trainingClassIndex: item.trainingClassIndex,
+      trainingClassName: item.trainingClassName,
+      trainingStartGameDay: item.trainingStartGameDay,
+      critterBanned: item.critterBanned,
+      petBanned: item.petBanned,
+      currentCritter: item.currentCritter,
+      currentPet: item.currentPet,
+      pluginName: item.pluginName,
+      blockedFromAdoptionReason: item.blockedFromAdoptionReason,
+      gender: item.gender ?? 'male',
+      pendingIntent: item.pendingIntent,
+      hasBeastblood: item.hasBeastblood,
+    }))
 
     store.setLiveGameData({ npcProfiles: profiles })
   }
@@ -318,7 +329,10 @@ export function initializeUIBridge() {
         }
       }
 
-      const isChild = Boolean(existing?.isChild ?? detail.isChild ?? store.children.has(detail.formId))
+      const isChild =
+        typeof detail.isChild === 'boolean'
+          ? detail.isChild
+          : Boolean(existing?.isChild ?? store.children.has(detail.formId))
       store.updateNPCProfile(
         detail.formId,
         {
@@ -331,6 +345,7 @@ export function initializeUIBridge() {
           currentHome: detail.currentHome,
           originalHome: detail.originalHome,
           stayAtHome: detail.stayAtHome,
+          currentPackage: detail.currentPackage,
           isChild,
           stage: detail.stage,
           isEphemeral: detail.isEphemeral,
@@ -344,8 +359,10 @@ export function initializeUIBridge() {
           petBanned: detail.petBanned,
           currentCritter: detail.currentCritter,
           currentPet: detail.currentPet,
+          blockedFromAdoptionReason: detail.blockedFromAdoptionReason,
           gender: detail.gender ?? existing?.gender ?? 'male',
-          pendingIntent: detail.pendingIntent ?? existing?.pendingIntent,
+          pendingIntent: detail.pendingIntent,
+          hasBeastblood: detail.hasBeastblood,
         },
         true // skipBridge = true (incoming from C++)
       )

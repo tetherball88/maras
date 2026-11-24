@@ -221,23 +221,36 @@ namespace MARAS::App {
             std::move(modalReq),
             [expectedEpoch,
              existingNamesCopy = std::move(existingNamesCopy),
+             defaultName,
              randomFallback = std::move(randomFallback),
              motherId,
              isFemale,
              cameFromMcmForceGrowth,
              onResolved = std::move(onResolved)](const ModalResponse& resp) mutable {
-                if (resp.aborted || !State::IsSessionEpochCurrent(expectedEpoch)) {
+                if (!State::IsSessionEpochCurrent(expectedEpoch)) {
                     return;
                 }
 
-                const std::string typedName = resp.GetString("child_name");
-                const std::string suggestedName = resp.GetString("suggested_name");
-                const std::string finalName = Domain::Lineage::ResolveSubmittedChildName(
-                    resp.buttonId,
-                    typedName,
-                    suggestedName,
-                    existingNamesCopy,
-                    randomFallback);
+                const std::string finalName = resp.aborted
+                    ? Domain::Lineage::ResolveSubmittedChildName(
+                          "random_name",
+                          "",
+                          defaultName,
+                          existingNamesCopy,
+                          defaultName)
+                    : Domain::Lineage::ResolveSubmittedChildName(
+                          resp.buttonId,
+                          resp.GetString("child_name"),
+                          resp.GetString("suggested_name"),
+                          existingNamesCopy,
+                          randomFallback);
+
+                if (resp.aborted) {
+                    MARAS_LOG_WARN(
+                        "[FertilityChildNamingCoordinator] Naming modal aborted while session epoch {} is current — resolving with fallback '{}'",
+                        expectedEpoch,
+                        finalName);
+                }
 
                 if (onResolved) {
                     onResolved(finalName);

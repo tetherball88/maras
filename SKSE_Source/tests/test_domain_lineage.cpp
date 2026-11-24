@@ -128,6 +128,65 @@ namespace MARAS::Tests {
 
         DeterministicRng rng{ 77u };
         MARAS_CHECK_EQ(PickWeightedChild(ws.Snapshot(), { cid }, 105.0f, rng), cid);
+
+        // SelectForcegreetChildrenByHouse selects only !forcegreetPending physical ChildStage::Child
+        const HouseId breezehome{ 0x00021900u };
+        ws.household.Write().RegisterHouse(breezehome, RefId{ 0x00021901u }, true);
+        const ChildId readyChild{ 0x00021910u };
+        const ChildId pendingChild{ 0x00021911u };
+        const ChildId infantChild{ 0x00021912u };
+        const ChildId adultChild{ 0x00021913u };
+        const ChildId synthChild{ 0xFF700190u };
+        for (auto [c, stg, fg] : std::array<std::tuple<ChildId, ChildStage, bool>, 5>{ {
+                 { readyChild, ChildStage::Child, false },
+                 { pendingChild, ChildStage::Child, true },
+                 { infantChild, ChildStage::Infant, false },
+                 { adultChild, ChildStage::Adult, false },
+                 { synthChild, ChildStage::Child, false } } }) {
+            ChildRecord lr{};
+            lr.childId = c;
+            lr.stage = stg;
+            ws.lineage.Write().UpsertChild(lr);
+            ChildHouseholdRecord hr{};
+            hr.childId = c;
+            hr.currentHouseId = breezehome;
+            hr.forcegreetPending = fg;
+            ws.household.Write().UpsertChildState(hr);
+        }
+        const auto fgCandidates = SelectForcegreetChildrenByHouse(ws.Snapshot(), breezehome, true);
+        MARAS_REQUIRE_EQ(fgCandidates.size(), std::size_t{ 1 });
+        MARAS_CHECK_EQ(fgCandidates[0], readyChild);
+
+        // ApplySetPresumedFather initializes secret on differing father & clears on bioMother/bioFather/0
+        const ActorId bioMom{ 0x00021920u };
+        const ActorId bioDad{ 0x00021921u };
+        const ActorId hub{ 0x00021922u };
+        ChildRecord patChild{};
+        patChild.childId = ChildId{ 0x00021925u };
+        patChild.stage = ChildStage::Child;
+        patChild.bioMother = bioMom;
+        patChild.bioFather = bioDad;
+        ws.lineage.Write().UpsertChild(patChild);
+
+        MARAS_CHECK(ApplySetPresumedFather(ws, SetPresumedFatherInput{
+            .childId = patChild.childId,
+            .fatherId = hub,
+            .currentGameDay = 42.0f,
+            .bioFatherName = "Faendal",
+            .presumedFatherRaceEditorId = "NordRace",
+            .bioFatherRaceEditorId = "WoodElfRace"
+        }));
+        {
+            const auto* r = ws.lineage.Read().FindChild(patChild.childId);
+            MARAS_REQUIRE(r != nullptr);
+            MARAS_CHECK_EQ(r->presumedFather, hub);
+            MARAS_CHECK(r->paternitySecret.isSecret && r->paternitySecret.isSecretForPartner &&
+                        r->paternitySecret.isSecretForBioFather && r->paternitySecret.hasPhenotypeMismatch);
+            MARAS_CHECK_EQ(r->paternitySecret.bioFatherName, std::string("Faendal"));
+        }
+        MARAS_CHECK(ApplySetPresumedFather(ws, SetPresumedFatherInput{ .childId = patChild.childId, .fatherId = bioMom }));
+        MARAS_CHECK(ws.lineage.Read().FindChild(patChild.childId)->presumedFather.IsNull());
+        MARAS_CHECK(!ws.lineage.Read().FindChild(patChild.childId)->paternitySecret.HasActiveSecret());
     }
 
     MARAS_TEST(DomainLineage, FertilityPhenotypeAndPaternitySecretLifecycle) {

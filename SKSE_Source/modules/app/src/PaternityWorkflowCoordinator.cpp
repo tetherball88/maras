@@ -695,7 +695,10 @@ namespace MARAS::App {
         return childID;
     }
 
-    bool PaternityWorkflowCoordinator::RemoveUnbornChild(RE::FormID motherID, RE::FormID bioFatherID) {
+    bool PaternityWorkflowCoordinator::RemoveUnbornChild(
+        RE::FormID motherID,
+        RE::FormID bioFatherID,
+        bool preserveDeliveryBatch) {
         if (motherID == 0) {
             return false;
         }
@@ -711,7 +714,7 @@ namespace MARAS::App {
                 State::ActorId{ motherID },
                 State::ActorId{ bioFatherID },
                 &affectedGuardians);
-            if (ws.lineage->GetUnbornOfMother(State::ActorId{ motherID }).empty()) {
+            if (!preserveDeliveryBatch && ws.lineage->GetUnbornOfMother(State::ActorId{ motherID }).empty()) {
                 ws.lineage.Write().EraseActiveDeliveryBatch(State::ActorId{ motherID });
             }
         });
@@ -1214,7 +1217,8 @@ namespace MARAS::App {
             return true;
         }
 
-        ResolvePaternitySecret(childID, /*discoveredByPartner=*/true, /*sendEvent=*/true);
+        ResolvePaternitySecretForPartner(childID, /*discoveredByPartner=*/true, /*sendEvent=*/true);
+        ResolvePaternitySecretForBioFather(childID, /*discoveredByBioFather=*/true, /*sendEvent=*/true);
 
         const float breakupRoll = Utils::RandomFloat(0.0f, 100.0f);
         const float breakupChance = static_cast<float>(settings.paternityBreakupChance);

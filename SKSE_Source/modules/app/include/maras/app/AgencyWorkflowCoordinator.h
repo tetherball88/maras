@@ -35,12 +35,15 @@ namespace MARAS::App {
         void RunDiceRollMatchmaking(float currentGameDay);
 
         bool RunManualMatchmaking(const std::vector<RE::FormID>& npcFormIDs);
-        bool RunGlobalMatchmaking(std::optional<std::size_t> maxResultsOverride = std::nullopt);
+        bool RunGlobalMatchmaking(bool autoApply = false,
+                                  std::optional<std::size_t> maxResultsOverride = std::nullopt);
 
         void ProcessManualResults(RE::FormID targetNpcId, const nlohmann::json& matchesArray);
         void ProcessGlobalManualResults(const nlohmann::json& matchesArray);
 
         [[nodiscard]] bool IsMatchmakingRunning() const noexcept;
+        void ClearMatchmakingRunning() noexcept;
+        void ClearPartnerAgencyRunning() noexcept;
         void ClearRunningBatchState() noexcept;
 
         // =====================================================================
@@ -94,19 +97,21 @@ namespace MARAS::App {
             float currentGameDay{ 0.0f };
             bool isGlobal{ false };
             bool isManual{ false };
+            bool isPartnerAgency{ false };
             bool skipConfirmationModal{ false };
         };
 
         [[nodiscard]] bool ValidateCandidate(MatchmakingResult& result,
                                              const State::WorldStateSnapshot& snap,
-                                             float currentGameDay) const;
+                                             float currentGameDay,
+                                             bool checkCooldown = false) const;
         [[nodiscard]] bool ApplyMatch(MatchmakingResult& result, float currentGameDay);
         void ApplyMatchmakingResults(std::vector<MatchmakingResult> results, const MatchBatchOptions& opts);
+        void FinalizePartnerAgencyMatches(std::vector<MatchmakingResult> matches, float currentGameDay);
 
         void StartVerificationBatch(std::vector<MatchmakingResult> candidates, const MatchBatchOptions& opts);
         void ProceedAfterVerification(std::vector<MatchmakingResult> results, const MatchBatchOptions& opts);
         void ShowMatchmakingReviewModal(std::vector<MatchmakingResult> results, const MatchBatchOptions& opts);
-        void StartMemoryBatchOrApply(std::vector<MatchmakingResult> results, const MatchBatchOptions& opts);
 
         std::atomic<bool> runningMatchmaking_{ false };
         std::atomic<bool> runningPartnerAgency_{ false };
